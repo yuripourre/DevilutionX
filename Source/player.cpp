@@ -151,20 +151,6 @@ void StartWalkAnimation(Player &player, Direction dir, bool pmWillBeCalled)
 	NewPlrAnim(player, player_graphic::Walk, dir, AnimationDistributionFlags::ProcessAnimationPending, skippedFrames);
 }
 
-/**
- * @brief Start moving a player to a new tile
- */
-void StartWalk(Player &player, Direction dir, bool pmWillBeCalled)
-{
-	if (player._pInvincible && player._pHitPoints == 0 && &player == MyPlayer) {
-		SyncPlrKill(player, DeathReason::Unknown);
-		return;
-	}
-
-	StartWalkAnimation(player, dir, pmWillBeCalled);
-	HandleWalkMode(player, dir);
-}
-
 void ClearStateVariables(Player &player)
 {
 	player.position.temp = { 0, 0 };
@@ -1529,6 +1515,20 @@ void GetPlayerGraphicsPath(std::string_view path, std::string_view prefix, std::
 }
 
 } // namespace
+
+/**
+ * @brief Start moving a player to a new tile
+ */
+void StartWalk(Player &player, Direction dir, bool pmWillBeCalled)
+{
+	if (player._pInvincible && player._pHitPoints == 0 && &player == MyPlayer) {
+		SyncPlrKill(player, DeathReason::Unknown);
+		return;
+	}
+
+	StartWalkAnimation(player, dir, pmWillBeCalled);
+	HandleWalkMode(player, dir);
+}
 
 void Player::CalcScrolls()
 {

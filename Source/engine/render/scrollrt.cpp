@@ -1350,8 +1350,8 @@ void DrawView(const Surface &out, Point startPosition)
 	DrawInfoBox(out);
 	UpdateLifeManaPercent(); // Update life/mana totals before rendering any portion of the flask.
 #ifndef USE_SDL1
-	// Hide flask tops when local co-op is enabled
-	if (!*GetOptions().Gameplay.enableLocalCoop) {
+	// Hide flask tops when local co-op is actually enabled (2+ controllers)
+	if (!IsLocalCoopEnabled()) {
 #endif
 		DrawLifeFlaskUpper(out);
 		DrawManaFlaskUpper(out);
@@ -1776,9 +1776,9 @@ void DrawAndBlit()
 	DrawView(out, ViewPosition);
 
 #ifndef USE_SDL1
-	// When local co-op option is enabled, hide the main panel UI and use corner HUDs instead
-	// This applies even with one player, so the local co-op UI is shown by default
-	const bool hideMainPanelForLocalCoop = *GetOptions().Gameplay.enableLocalCoop && (!g_LocalCoop.enabled || !g_LocalCoop.IsAnyCharacterSelectActive());
+	// When local co-op is actually enabled (2+ controllers), hide the main panel UI and use corner HUDs instead
+	// Only show main panel during character selection if local co-op is initialized and character selection is active
+	const bool hideMainPanelForLocalCoop = IsLocalCoopEnabled() && (!g_LocalCoop.IsAnyCharacterSelectActive());
 #else
 	const bool hideMainPanelForLocalCoop = false;
 #endif

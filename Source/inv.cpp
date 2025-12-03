@@ -20,6 +20,7 @@
 
 #include "DiabloUI/ui_flags.hpp"
 #include "controls/control_mode.hpp"
+#include "controls/local_coop.hpp"
 #include "controls/plrctrls.h"
 #include "cursor.h"
 #include "engine/backbuffer_state.hpp"
@@ -638,8 +639,8 @@ std::optional<inv_xy_slot> FindSlotUnderCursor(Point cursorPosition)
 	}
 
 #ifndef USE_SDL1
-	// Skip belt mouse events when local co-op is enabled
-	if (!*GetOptions().Gameplay.enableLocalCoop) {
+	// Skip belt mouse events when local co-op is actually enabled (2+ controllers)
+	if (!IsLocalCoopEnabled()) {
 #endif
 		testPosition = static_cast<Point>(cursorPosition - GetMainPanel().position);
 		for (std::underlying_type_t<inv_xy_slot> r = SLOTXY_BELT_FIRST; r != NUM_XY_SLOTS; r++) {
@@ -1922,8 +1923,8 @@ int SyncDropEar(Point position, uint16_t icreateinfo, uint32_t iseed, uint8_t cu
 int8_t CheckInvHLight()
 {
 #ifndef USE_SDL1
-	// Skip belt mouse events when local co-op is enabled
-	const bool skipBeltForLocalCoop = *GetOptions().Gameplay.enableLocalCoop;
+	// Skip belt mouse events when local co-op is actually enabled (2+ controllers)
+	const bool skipBeltForLocalCoop = IsLocalCoopEnabled();
 #else
 	const bool skipBeltForLocalCoop = false;
 #endif
