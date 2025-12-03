@@ -334,6 +334,12 @@ void PrintInfo(const Surface &out)
 	if (ChatFlag)
 		return;
 
+#ifndef USE_SDL1
+	// Hide info box text in local co-op mode
+	if (*GetOptions().Gameplay.enableLocalCoop)
+		return;
+#endif
+
 	const int space[] = { 18, 12, 6, 3, 0 };
 	Rectangle infoBox = InfoBoxRect;
 
@@ -1524,6 +1530,12 @@ void FreeControlPan()
 
 void DrawInfoBox(const Surface &out)
 {
+#ifndef USE_SDL1
+	// Hide info box in local co-op mode
+	if (*GetOptions().Gameplay.enableLocalCoop)
+		return;
+#endif
+
 	DrawPanelBox(out, MakeSdlRect(InfoBoxRect.position.x, InfoBoxRect.position.y + PanelPaddingHeight, InfoBoxRect.size.width, InfoBoxRect.size.height), GetMainPanel().position + Displacement { InfoBoxRect.position.x, InfoBoxRect.position.y });
 	if (!MainPanelFlag && !trigflag && pcursinvitem == -1 && pcursstashitem == StashStruct::EmptyCell && !SpellSelectFlag && pcurs != CURSOR_HOURGLASS) {
 		InfoString = StringOrView {};
