@@ -1776,9 +1776,9 @@ void DrawAndBlit()
 	DrawView(out, ViewPosition);
 
 #ifndef USE_SDL1
-	// When local co-op is actually enabled (2+ controllers), hide the main panel UI and use corner HUDs instead
-	// Only show main panel during character selection if local co-op is initialized and character selection is active
-	const bool hideMainPanelForLocalCoop = IsLocalCoopEnabled() && (!g_LocalCoop.IsAnyCharacterSelectActive());
+	// When local co-op is enabled (2+ controllers), hide the main panel UI and use corner HUDs instead.
+	// Player 1's corner HUD will always show when local coop is enabled.
+	const bool hideMainPanelForLocalCoop = IsLocalCoopEnabled();
 #else
 	const bool hideMainPanelForLocalCoop = false;
 #endif
