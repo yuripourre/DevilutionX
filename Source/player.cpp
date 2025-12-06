@@ -18,6 +18,7 @@
 
 #include "control.h"
 #include "controls/control_mode.hpp"
+#include "controls/local_coop.hpp"
 #include "controls/plrctrls.h"
 #include "cursor.h"
 #include "dead.h"
@@ -2582,7 +2583,11 @@ void FixPlayerLocation(Player &player, Direction bDir)
 	player.position.future = player.position.tile;
 	player._pdir = bDir;
 	if (&player == MyPlayer) {
-		ViewPosition = player.position.tile;
+		// In local co-op mode with multiple active players, let UpdateLocalCoopCamera handle ViewPosition
+		// to center the view between all players instead of just following Player 1
+		if (!IsLocalCoopEnabled() || g_LocalCoop.GetActivePlayerCount() == 0) {
+			ViewPosition = player.position.tile;
+		}
 	}
 	ChangeLightXY(player.lightId, player.position.tile);
 	ChangeVisionXY(player.getId(), player.position.tile);
