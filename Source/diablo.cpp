@@ -370,8 +370,9 @@ void LeftMouseDown(uint16_t modState)
 	const bool isCtrlHeld = (modState & SDL_KMOD_CTRL) != 0;
 
 #ifndef USE_SDL1
-	// Skip main panel mouse handling when local co-op is actually enabled (2+ controllers)
-	const bool skipMainPanelForLocalCoop = IsLocalCoopEnabled();
+	// Skip main panel mouse handling only when the main panel is actually hidden for local co-op
+	// (i.e., local co-op is enabled AND at least one co-op player has spawned)
+	const bool skipMainPanelForLocalCoop = IsLocalCoopEnabled() && IsAnyLocalCoopPlayerInitialized();
 #else
 	const bool skipMainPanelForLocalCoop = false;
 #endif
@@ -3152,7 +3153,15 @@ tl::expected<void, std::string> LoadGameLevelDungeon(bool firstflag, lvl_entry l
 void LoadGameLevelSyncPlayerEntry(lvl_entry lvldir)
 {
 	for (Player &player : Players) {
-		if (player.plractive && player.isOnActiveLevel() && (!player._pLvlChanging || &player == MyPlayer)) {
+		if (!player.plractive || !player.isOnActiveLevel())
+			continue;
+		
+		// Include player if:
+		// 1. They're not changing levels (normal case for remote multiplayer players)
+		// 2. OR they're MyPlayer (local player 1 initiating the change)
+		// 3. OR they're a local coop player (they change levels together with MyPlayer)
+		bool isLocalCoopPlayer = IsLocalCoopEnabled() && IsLocalCoopPlayer(player);
+		if (!player._pLvlChanging || &player == MyPlayer || isLocalCoopPlayer) {
 			if (player._pHitPoints > 0) {
 				if (lvldir != ENTRY_LOAD)
 					SyncInitPlrPos(player);
@@ -3187,6 +3196,12 @@ void LoadGameLevelInitPlayers(bool firstflag, lvl_entry lvldir)
 			InitPlayerGFX(player);
 			if (lvldir != ENTRY_LOAD)
 				InitPlayer(player, firstflag);
+			
+			// Clear level changing flag for local coop players
+			// In single-player local coop, there's no network message to clear this flag
+			if (IsLocalCoopEnabled() && IsLocalCoopPlayer(player)) {
+				player._pLvlChanging = false;
+			}
 		}
 	}
 }
