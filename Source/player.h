@@ -965,6 +965,7 @@ void StartPlayerKill(Player &player, DeathReason deathReason);
 void StripTopGold(Player &player);
 void SyncPlrKill(Player &player, DeathReason deathReason);
 void RemovePlrMissiles(const Player &player);
+void InitLevelChange(Player &player);
 void StartNewLvl(Player &player, interface_mode fom, int lvl);
 void RestartTownLvl(Player &player);
 void StartWarpLvl(Player &player, size_t pidx);
