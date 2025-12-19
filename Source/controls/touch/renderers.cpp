@@ -413,11 +413,7 @@ std::optional<VirtualGamepadPotionType> PotionButtonRenderer::GetPotionType()
 			return GAMEPAD_REJUVENATION;
 		if (item._iMiscId == IMISC_FULLREJUV)
 			return GAMEPAD_FULL_REJUVENATION;
-		if (item._iMiscId == IMISC_ARENAPOT && MyPlayer->isOnArenaLevel())
-			return GAMEPAD_ARENA_POTION;
-	}
 
-	return std::nullopt;
 }
 
 VirtualGamepadButtonType StandButtonRenderer::GetButtonType()

@@ -649,73 +649,6 @@ std::string TextCmdHelp(const std::string_view parameter)
 	return StrCat(_("Description: "), _(textCmdItem.description), _("\nParameters: "), _(textCmdItem.requiredParameter));
 }
 
-void AppendArenaOverview(std::string &ret)
-{
-	for (int arena = SL_FIRST_ARENA; arena <= SL_LAST; arena++) {
-		StrAppend(ret, "\n", arena - SL_FIRST_ARENA + 1, " (", QuestLevelNames[arena], ")");
-	}
-}
-
-std::string TextCmdArena(const std::string_view parameter)
-{
-	std::string ret;
-	if (!gbIsMultiplayer) {
-		StrAppend(ret, _("Arenas are only supported in multiplayer."));
-		return ret;
-	}
-
-	if (parameter.empty()) {
-		StrAppend(ret, _("What arena do you want to visit?"));
-		AppendArenaOverview(ret);
-		return ret;
-	}
-
-	const ParseIntResult<int> parsedParam = ParseInt<int>(parameter, /*min=*/0);
-	const _setlevels arenaLevel = parsedParam.has_value() ? static_cast<_setlevels>(parsedParam.value() - 1 + SL_FIRST_ARENA) : _setlevels::SL_NONE;
-	if (!IsArenaLevel(arenaLevel)) {
-		StrAppend(ret, _("Invalid arena-number. Valid numbers are:"));
-		AppendArenaOverview(ret);
-		return ret;
-	}
-
-	if (!MyPlayer->isOnLevel(0) && !MyPlayer->isOnArenaLevel()) {
-		StrAppend(ret, _("To enter a arena, you need to be in town or another arena."));
-		return ret;
-	}
-
-	setlvltype = GetArenaLevelType(arenaLevel);
-	StartNewLvl(*MyPlayer, WM_DIABSETLVL, arenaLevel);
-	return ret;
-}
-
-std::string TextCmdArenaPot(const std::string_view parameter)
-{
-	std::string ret;
-	if (!gbIsMultiplayer) {
-		StrAppend(ret, _("Arenas are only supported in multiplayer."));
-		return ret;
-	}
-	const int numPots = ParseInt<int>(parameter, /*min=*/1).value_or(1);
-
-	Player &myPlayer = *MyPlayer;
-
-	for (int potNumber = numPots; potNumber > 0; potNumber--) {
-		Item item {};
-		InitializeItem(item, IDI_ARENAPOT);
-		GenerateNewSeed(item);
-		item.updateRequiredStatsCacheForPlayer(myPlayer);
-
-		if (!AutoPlaceItemInBelt(myPlayer, item, true, true) && !AutoPlaceItemInInventory(myPlayer, item, true)) {
-			break; // inventory is full
-		}
-	}
-
-	return ret;
-}
-
-std::string TextCmdInspect(const std::string_view parameter)
-{
-	std::string ret;
 	if (!gbIsMultiplayer) {
 		StrAppend(ret, _("Inspecting only supported in multiplayer."));
 		return ret;
@@ -848,8 +781,6 @@ std::string TextCmdPing(const std::string_view parameter)
 
 std::vector<TextCmdItem> TextCmdList = {
 	{ "/help", N_("Prints help overview or help for a specific command."), N_("[command]"), &TextCmdHelp },
-	{ "/arena", N_("Enter a PvP Arena."), N_("<arena-number>"), &TextCmdArena },
-	{ "/arenapot", N_("Gives Arena Potions."), N_("<number>"), &TextCmdArenaPot },
 	{ "/inspect", N_("Inspects stats and equipment of another player."), N_("<player name>"), &TextCmdInspect },
 	{ "/seedinfo", N_("Show seed infos for current level."), "", &TextCmdLevelSeed },
 	{ "/ping", N_("Show latency statistics for another player."), N_("<player name>"), &TextCmdPing },

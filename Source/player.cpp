@@ -2687,7 +2687,7 @@ StartPlayerKill(Player &player, DeathReason deathReason)
 		gamemenu_off();
 	}
 
-	const bool dropGold = !gbIsMultiplayer || !(player.isOnLevel(16) || player.isOnArenaLevel());
+	const bool dropGold = !gbIsMultiplayer || !player.isOnLevel(16);
 	const bool dropItems = dropGold && deathReason == DeathReason::MonsterOrTrap;
 	const bool dropEar = dropGold && deathReason == DeathReason::Player;
 

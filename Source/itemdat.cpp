@@ -453,7 +453,6 @@ tl::expected<item_misc_id, std::string> ParseItemMiscId(std::string_view value)
 	if (value == "RUNELAST") return IMISC_RUNELAST;
 	if (value == "AURIC") return IMISC_AURIC;
 	if (value == "NOTE") return IMISC_NOTE;
-	if (value == "ARENAPOT") return IMISC_ARENAPOT;
 	return tl::make_unexpected("Unknown enum value");
 }
 

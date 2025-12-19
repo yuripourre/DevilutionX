@@ -1990,7 +1990,7 @@ void UseBeltItem(BeltItemType type)
 			continue;
 		}
 
-		const bool isRejuvenation = IsAnyOf(item._iMiscId, IMISC_REJUV, IMISC_FULLREJUV) || (item._iMiscId == IMISC_ARENAPOT && MyPlayer->isOnArenaLevel());
+		const bool isRejuvenation = IsAnyOf(item._iMiscId, IMISC_REJUV, IMISC_FULLREJUV);
 		const bool isHealing = isRejuvenation || IsAnyOf(item._iMiscId, IMISC_HEAL, IMISC_FULLHEAL) || item.isScrollOf(SpellID::Healing);
 		const bool isMana = isRejuvenation || IsAnyOf(item._iMiscId, IMISC_MANA, IMISC_FULLMANA);
 

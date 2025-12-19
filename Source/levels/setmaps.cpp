@@ -151,15 +151,6 @@ void LoadSetMap()
 		AddVileObjs();
 		InitNoTriggers();
 		break;
-	case SL_ARENA_CHURCH:
-		LoadArenaMap("arena\\church.dun", { 29, 22 }, { 28, 20 });
-		break;
-	case SL_ARENA_HELL:
-		LoadArenaMap("arena\\hell.dun", { 34, 26 }, { 33, 26 });
-		break;
-	case SL_ARENA_CIRCLE_OF_LIFE:
-		LoadArenaMap("arena\\circle_of_death.dun", { 30, 26 }, { 29, 26 });
-		break;
 	case SL_NONE:
 #ifdef _DEBUG
 		LoadCustomMap(TestMapPath.c_str(), ViewPosition);

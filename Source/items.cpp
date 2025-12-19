@@ -1726,8 +1726,7 @@ void PrintItemOil(char iDidx)
 	case IMISC_FULLREJUV:
 		AddItemInfoBoxString(_("restore all life and mana"));
 		break;
-	case IMISC_ARENAPOT:
-		AddItemInfoBoxString(_("restore all life and mana"));
+			AddItemInfoBoxString(_("restore all life and mana"));
 		AddItemInfoBoxString(_("(works only in arenas)"));
 		break;
 	}
@@ -1829,8 +1828,7 @@ void PrintItemMisc(const Item &item)
 	}
 	const bool isOil = (item._iMiscId >= IMISC_USEFIRST && item._iMiscId <= IMISC_USELAST)
 	    || (item._iMiscId > IMISC_OILFIRST && item._iMiscId < IMISC_OILLAST)
-	    || (item._iMiscId > IMISC_RUNEFIRST && item._iMiscId < IMISC_RUNELAST)
-	    || item._iMiscId == IMISC_ARENAPOT;
+	    || (item._iMiscId > IMISC_RUNEFIRST && item._iMiscId < IMISC_RUNELAST);
 	const bool mouseRequiresTarget = (item._iMiscId == IMISC_SCROLLT && item._iSpell != SpellID::Flash)
 	    || (item._iMiscId == IMISC_SCROLL && IsAnyOf(item._iSpell, SpellID::TownPortal, SpellID::Identify));
 	const bool gamepadRequiresTarget = item.isScroll() && TargetsMonster(item._iSpell);
@@ -4251,8 +4249,7 @@ void UseItem(Player &player, item_misc_id mid, SpellID spellID, int spellFrom)
 		}
 	} break;
 	case IMISC_FULLREJUV:
-	case IMISC_ARENAPOT:
-		player.RestoreFullLife();
+			player.RestoreFullLife();
 		player.RestoreFullMana();
 		if (&player == MyPlayer) {
 			RedrawComponent(PanelDrawComponent::Health);

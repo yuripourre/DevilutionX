@@ -80,7 +80,6 @@ enum _item_indexes : int16_t { // TODO defines all indexes in AllItemsList
 	IDI_SHORT_BATTLE_BOW = 148,
 	IDI_RUNEOFSTONE = 165,
 	IDI_SORCERER_DIABLO,
-	IDI_ARENAPOT,
 
 	IDI_NUM_DEFAULT_ITEMS,
 	IDI_NONE = -1,
@@ -486,7 +485,6 @@ enum item_misc_id : int8_t {
 	IMISC_RUNELAST,
 	IMISC_AURIC,
 	IMISC_NOTE,
-	IMISC_ARENAPOT,
 	IMISC_INVALID = -1,
 };
 

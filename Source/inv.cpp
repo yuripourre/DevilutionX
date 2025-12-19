@@ -2173,11 +2173,6 @@ bool UseInvItem(int cii)
 		return true;
 	}
 
-	if (item->_iMiscId == IMISC_ARENAPOT && !player.isOnArenaLevel()) {
-		player.Say(HeroSpeech::ThatWontWorkHere);
-		return true;
-	}
-
 	const int idata = ItemCAnimTbl[item->_iCurs];
 	if (item->_iMiscId == IMISC_BOOK)
 		PlaySFX(SfxID::ReadBook);

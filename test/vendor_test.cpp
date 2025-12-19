@@ -151,12 +151,12 @@ std::string misctype_str(item_misc_id type)
 		"IMISC_OILIMP",		"IMISC_OILLAST",	"IMISC_MAPOFDOOM",	"IMISC_EAR",
 		"IMISC_SPECELIX",	"IMISC_0x2D",		"IMISC_RUNEFIRST",	"IMISC_RUNEF",
 		"IMISC_RUNEL",		"IMISC_GR_RUNEL",	"IMISC_GR_RUNEF",	"IMISC_RUNES",
-		"IMISC_RUNELAST",	"IMISC_AURIC",		"IMISC_NOTE",		"IMISC_ARENAPOT"
+		"IMISC_RUNELAST",	"IMISC_AURIC",		"IMISC_NOTE"
 		// clang-format on
 	};
 
 	if (type == IMISC_INVALID) return "IMISC_INVALID";
-	if (type < IMISC_NONE || type > IMISC_ARENAPOT) return "IMISC does not exist!";
+	if (type < IMISC_NONE || type > IMISC_NOTE) return "IMISC does not exist!";
 	return MISC_TYPES[static_cast<int>(type)];
 }
 

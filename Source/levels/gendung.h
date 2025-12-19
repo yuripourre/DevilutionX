@@ -38,25 +38,8 @@ enum _setlevels : int8_t {
 	SL_POISONWATER,
 	SL_VILEBETRAYER,
 
-	SL_ARENA_CHURCH,
-	SL_ARENA_HELL,
-	SL_ARENA_CIRCLE_OF_LIFE,
-
-	SL_FIRST_ARENA = SL_ARENA_CHURCH,
-	SL_LAST = SL_ARENA_CIRCLE_OF_LIFE,
+	SL_LAST = SL_VILEBETRAYER,
 };
-
-inline bool IsArenaLevel(_setlevels setLevel)
-{
-	switch (setLevel) {
-	case SL_ARENA_CHURCH:
-	case SL_ARENA_HELL:
-	case SL_ARENA_CIRCLE_OF_LIFE:
-		return true;
-	default:
-		return false;
-	}
-}
 
 tl::expected<dungeon_type, std::string> ParseDungeonType(std::string_view value);
 tl::expected<_setlevels, std::string> ParseSetLevel(std::string_view value);

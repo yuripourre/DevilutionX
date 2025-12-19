@@ -1,0 +1,10 @@
+{
+	"name": "Arena",
+	"version": "1.0.0",
+	"description": "PvP Arena battles - Church, Hell, and Circle of Life",
+	"author": "DevilutionX Team",
+	"requires": {
+		"devilutionx": ">=1.5.0"
+	},
+	"lua_entry": "init.lua"
+}

@@ -123,11 +123,6 @@ Cutscenes PickCutscene(interface_mode uMsg)
 			return CutLevel2;
 		if (setlvlnum == SL_VILEBETRAYER)
 			return CutPortalRed;
-		if (IsArenaLevel(setlvlnum)) {
-			if (uMsg == WM_DIABSETLVL)
-				return GetCutSceneFromLevelType(setlvltype);
-			return CutTown;
-		}
 		return CutLevel1;
 	default:
 		app_fatal("Unknown progress mode");

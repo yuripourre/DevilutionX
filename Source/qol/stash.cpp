@@ -114,7 +114,7 @@ std::optional<Point> FindTargetSlotUnderItemCursor(Point cursorPosition, Size it
 
 bool IsItemAllowedInStash(const Item &item)
 {
-	return item._iMiscId != IMISC_ARENAPOT;
+	return true;
 }
 
 void CheckStashPaste(Point cursorPosition)

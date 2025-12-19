@@ -365,7 +365,6 @@ const char *ITEM_163_NAME = N_("Greater Rune of Fire");
 const char *ITEM_164_NAME = N_("Greater Rune of Lightning");
 const char *ITEM_165_NAME = N_("Rune of Stone");
 const char *ITEM_166_NAME = N_("Short Staff of Charged Bolt");
-const char *IDI_ARENAPOT_NAME = N_("Arena Potion");
 const char *UNIQUE_ITEM_0_NAME = N_("The Butcher's Cleaver");
 const char *UNIQUE_ITEM_9_NAME = N_("Lightforge");
 const char *UNIQUE_ITEM_10_NAME = N_("The Rift Bow");
