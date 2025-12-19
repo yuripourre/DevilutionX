@@ -1,0 +1,2 @@
+type	name	position_x	position_y	direction	animWidth	animPath	animFrames	animDelay	gossipTexts	animOrder
+TOWN_PEGBOY	Wirt the Peg-legged boy	53	80	South	96	towners\townboy\pegkid1	20	6	TEXT_WIRT2,TEXT_WIRT3,TEXT_WIRT4,TEXT_WIRT5,TEXT_WIRT6,TEXT_WIRT7,TEXT_WIRT8,TEXT_WIRT9,TEXT_WIRT11,TEXT_WIRT12	
