@@ -1137,6 +1137,12 @@ KeymapperOptions::KeymapperOptions()
 	keyIDToKeyName.emplace(SDLK_DELETE, "DELETE");
 	keyIDToKeyName.emplace(SDLK_HOME, "HOME");
 	keyIDToKeyName.emplace(SDLK_END, "END");
+	keyIDToKeyName.emplace(SDLK_PAGEUP, "PAGEUP");
+	keyIDToKeyName.emplace(SDLK_PAGEDOWN, "PAGEDOWN");
+	keyIDToKeyName.emplace(SDLK_UP, "UP");
+	keyIDToKeyName.emplace(SDLK_DOWN, "DOWN");
+	keyIDToKeyName.emplace(SDLK_LEFT, "LEFT");
+	keyIDToKeyName.emplace(SDLK_RIGHT, "RIGHT");
 
 	keyIDToKeyName.emplace(SDLK_KP_DIVIDE, "KEYPAD /");
 	keyIDToKeyName.emplace(SDLK_KP_MULTIPLY, "KEYPAD *");
@@ -1190,6 +1196,14 @@ void KeymapperOptions::Action::LoadFromIni(std::string_view category)
 
 	const std::string_view iniValue = iniValues.back().value;
 	if (iniValue.empty()) {
+		// Migration: some actions were previously saved as unbound because their default
+		// keys were not supported by the keymapper. If we see an explicit empty mapping
+		// for these actions, treat it as "use default".
+		if (IsAnyOf(key, "PreviousTownNpc", "NextTownNpc", "KeyboardWalkNorth", "KeyboardWalkSouth", "KeyboardWalkEast", "KeyboardWalkWest")) {
+			SetValue(defaultKey);
+			return;
+		}
+
 		SetValue(SDLK_UNKNOWN);
 		return;
 	}
@@ -1224,7 +1238,7 @@ void KeymapperOptions::Action::SaveToIni(std::string_view category) const
 std::string_view KeymapperOptions::Action::GetValueDescription() const
 {
 	if (boundKey == SDLK_UNKNOWN)
-		return "";
+		return _("Unbound");
 	auto keyNameIt = GetOptions().Keymapper.keyIDToKeyName.find(boundKey);
 	if (keyNameIt == GetOptions().Keymapper.keyIDToKeyName.end()) {
 		return "";
