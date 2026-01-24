@@ -5,9 +5,7 @@
  */
 #include <algorithm>
 #include <array>
-#include <cstdlib>
 #include <cstdint>
-#include <limits>
 #include <queue>
 #include <string_view>
 #include <vector>
@@ -114,7 +112,6 @@
 #include "track.h"
 #include "utils/console.h"
 #include "utils/display.h"
-#include "utils/format_int.hpp"
 #include "utils/is_of.hpp"
 #include "utils/language.h"
 #include "utils/parse_int.hpp"
@@ -1746,156 +1743,6 @@ void UpdatePlayerLowHpWarningSound()
 }
 #endif // NOSOUND
 
-namespace {
-
-[[nodiscard]] bool IsBossMonsterForHpAnnouncement(const Monster &monster)
-{
-	return monster.isUnique() || monster.ai == MonsterAIID::Diablo;
-}
-
-} // namespace
-
-void UpdateLowDurabilityWarnings()
-{
-	static std::array<uint32_t, NUM_INVLOC> WarnedSeeds {};
-	static std::array<bool, NUM_INVLOC> HasWarned {};
-
-	if (MyPlayer == nullptr)
-		return;
-	if (MyPlayerIsDead || MyPlayer->_pmode == PM_DEATH || MyPlayer->hasNoLife())
-		return;
-
-	std::vector<std::string> newlyLow;
-	newlyLow.reserve(NUM_INVLOC);
-
-	for (int slot = 0; slot < NUM_INVLOC; ++slot) {
-		const Item &item = MyPlayer->InvBody[slot];
-		if (item.isEmpty() || item._iMaxDur <= 0 || item._iMaxDur == DUR_INDESTRUCTIBLE || item._iDurability == DUR_INDESTRUCTIBLE) {
-			HasWarned[slot] = false;
-			continue;
-		}
-
-		const int maxDur = item._iMaxDur;
-		const int durability = item._iDurability;
-		if (durability <= 0) {
-			HasWarned[slot] = false;
-			continue;
-		}
-
-		int threshold = std::max(2, maxDur / 10);
-		threshold = std::clamp(threshold, 1, maxDur);
-
-		const bool isLow = durability <= threshold;
-		if (!isLow) {
-			HasWarned[slot] = false;
-			continue;
-		}
-
-		if (HasWarned[slot] && WarnedSeeds[slot] == item._iSeed)
-			continue;
-
-		HasWarned[slot] = true;
-		WarnedSeeds[slot] = item._iSeed;
-
-		const StringOrView name = item.getName();
-		if (!name.empty())
-			newlyLow.emplace_back(name.str().data(), name.str().size());
-	}
-
-	if (newlyLow.empty())
-		return;
-
-	// Add ordinal numbers for duplicates (e.g. two rings with the same name).
-	for (size_t i = 0; i < newlyLow.size(); ++i) {
-		int total = 0;
-		for (size_t j = 0; j < newlyLow.size(); ++j) {
-			if (newlyLow[j] == newlyLow[i])
-				++total;
-		}
-		if (total <= 1)
-			continue;
-
-		int ordinal = 1;
-		for (size_t j = 0; j < i; ++j) {
-			if (newlyLow[j] == newlyLow[i])
-				++ordinal;
-		}
-		newlyLow[i] = fmt::format("{} {}", newlyLow[i], ordinal);
-	}
-
-	std::string joined;
-	for (size_t i = 0; i < newlyLow.size(); ++i) {
-		if (i != 0)
-			joined += ", ";
-		joined += newlyLow[i];
-	}
-
-	SpeakText(fmt::format(fmt::runtime(_("Low durability: {:s}")), joined), /*force=*/true);
-}
-
-void UpdateBossHealthAnnouncements()
-{
-	static dungeon_type LastLevelType = DTYPE_NONE;
-	static int LastCurrLevel = -1;
-	static bool LastSetLevel = false;
-	static _setlevels LastSetLevelNum = SL_NONE;
-	static std::array<int8_t, MaxMonsters> LastAnnouncedBucket {};
-
-	if (MyPlayer == nullptr)
-		return;
-	if (leveltype == DTYPE_TOWN)
-		return;
-
-	const bool levelChanged = LastLevelType != leveltype || LastCurrLevel != currlevel || LastSetLevel != setlevel || LastSetLevelNum != setlvlnum;
-	if (levelChanged) {
-		LastAnnouncedBucket.fill(-1);
-		LastLevelType = leveltype;
-		LastCurrLevel = currlevel;
-		LastSetLevel = setlevel;
-		LastSetLevelNum = setlvlnum;
-	}
-
-	for (size_t monsterId = 0; monsterId < MaxMonsters; ++monsterId) {
-		if (LastAnnouncedBucket[monsterId] < 0)
-			continue;
-
-		const Monster &monster = Monsters[monsterId];
-		if (monster.isInvalid || monster.hitPoints <= 0 || !IsBossMonsterForHpAnnouncement(monster))
-			LastAnnouncedBucket[monsterId] = -1;
-	}
-
-	for (size_t i = 0; i < ActiveMonsterCount; i++) {
-		const int monsterId = static_cast<int>(ActiveMonsters[i]);
-		const Monster &monster = Monsters[monsterId];
-
-		if (monster.isInvalid)
-			continue;
-		if ((monster.flags & MFLAG_HIDDEN) != 0)
-			continue;
-		if (!IsBossMonsterForHpAnnouncement(monster))
-			continue;
-		if (monster.hitPoints <= 0 || monster.maxHitPoints <= 0)
-			continue;
-
-		const int64_t hp = std::clamp<int64_t>(monster.hitPoints, 0, monster.maxHitPoints);
-		const int64_t maxHp = monster.maxHitPoints;
-		const int hpPercent = static_cast<int>(std::clamp<int64_t>(hp * 100 / maxHp, 0, 100));
-		const int bucket = ((hpPercent + 9) / 10) * 10;
-
-		int8_t &lastBucket = LastAnnouncedBucket[monsterId];
-		if (lastBucket < 0) {
-			lastBucket = static_cast<int8_t>(((hpPercent + 9) / 10) * 10);
-			continue;
-		}
-
-		if (bucket >= lastBucket)
-			continue;
-
-		lastBucket = static_cast<int8_t>(bucket);
-		SpeakText(fmt::format(fmt::runtime(_("{:s} health: {:d}%")), monster.name(), bucket), /*force=*/false);
-	}
-}
-
 void GameLogic()
 {
 	if (!ProcessInput()) {
@@ -1906,7 +1753,6 @@ void GameLogic()
 		ProcessPlayers();
 		UpdateAutoWalkTownNpc();
 		UpdateAutoWalkTracker();
-		UpdateLowDurabilityWarnings();
 	}
 	if (leveltype != DTYPE_TOWN) {
 		gGameLogicStep = GameLogicStep::ProcessMonsters;
@@ -1922,7 +1768,6 @@ void GameLogic()
 		ProcessItems();
 		ProcessLightList();
 		ProcessVisionList();
-		UpdateBossHealthAnnouncements();
 		UpdateProximityAudioCues();
 	} else {
 		gGameLogicStep = GameLogicStep::ProcessTowners;
@@ -2034,10 +1879,6 @@ int AutoWalkTownNpcTarget = -1;
 enum class TrackerTargetCategory : uint8_t {
 	Items,
 	Chests,
-	Doors,
-	Shrines,
-	Objects,
-	Breakables,
 	Monsters,
 };
 
@@ -2192,7 +2033,7 @@ void SpeakSelectedTownNpc()
 	const int distance = playerPosition.WalkingDistance(towner.position);
 
 	std::string msg;
-	StrAppend(msg, towner.name);
+	StrAppend(msg, _("Selected: "), towner.name);
 	StrAppend(msg, "\n", _("Distance: "), distance);
 	StrAppend(msg, "\n", _("Position: "), towner.position.x, ", ", towner.position.y);
 	SpeakText(msg, true);
@@ -2321,14 +2162,9 @@ void UpdateAutoWalkTownNpc()
 namespace {
 
 constexpr int TrackerInteractDistanceTiles = 1;
-constexpr int TrackerCycleDistanceTiles = 12;
 
 int LockedTrackerItemId = -1;
 int LockedTrackerChestId = -1;
-int LockedTrackerDoorId = -1;
-int LockedTrackerShrineId = -1;
-int LockedTrackerObjectId = -1;
-int LockedTrackerBreakableId = -1;
 int LockedTrackerMonsterId = -1;
 
 struct TrackerLevelKey {
@@ -2344,10 +2180,6 @@ void ClearTrackerLocks()
 {
 	LockedTrackerItemId = -1;
 	LockedTrackerChestId = -1;
-	LockedTrackerDoorId = -1;
-	LockedTrackerShrineId = -1;
-	LockedTrackerObjectId = -1;
-	LockedTrackerBreakableId = -1;
 	LockedTrackerMonsterId = -1;
 }
 
@@ -2374,14 +2206,6 @@ int &LockedTrackerTargetId(TrackerTargetCategory category)
 		return LockedTrackerItemId;
 	case TrackerTargetCategory::Chests:
 		return LockedTrackerChestId;
-	case TrackerTargetCategory::Doors:
-		return LockedTrackerDoorId;
-	case TrackerTargetCategory::Shrines:
-		return LockedTrackerShrineId;
-	case TrackerTargetCategory::Objects:
-		return LockedTrackerObjectId;
-	case TrackerTargetCategory::Breakables:
-		return LockedTrackerBreakableId;
 	case TrackerTargetCategory::Monsters:
 	default:
 		return LockedTrackerMonsterId;
@@ -2395,14 +2219,6 @@ std::string_view TrackerTargetCategoryLabel(TrackerTargetCategory category)
 		return _("items");
 	case TrackerTargetCategory::Chests:
 		return _("chests");
-	case TrackerTargetCategory::Doors:
-		return _("doors");
-	case TrackerTargetCategory::Shrines:
-		return _("shrines");
-	case TrackerTargetCategory::Objects:
-		return _("objects");
-	case TrackerTargetCategory::Breakables:
-		return _("breakables");
 	case TrackerTargetCategory::Monsters:
 		return _("monsters");
 	default:
@@ -2429,18 +2245,6 @@ void CycleTrackerTargetKeyPressed()
 		SelectedTrackerTargetCategory = TrackerTargetCategory::Chests;
 		break;
 	case TrackerTargetCategory::Chests:
-		SelectedTrackerTargetCategory = TrackerTargetCategory::Doors;
-		break;
-	case TrackerTargetCategory::Doors:
-		SelectedTrackerTargetCategory = TrackerTargetCategory::Shrines;
-		break;
-	case TrackerTargetCategory::Shrines:
-		SelectedTrackerTargetCategory = TrackerTargetCategory::Objects;
-		break;
-	case TrackerTargetCategory::Objects:
-		SelectedTrackerTargetCategory = TrackerTargetCategory::Breakables;
-		break;
-	case TrackerTargetCategory::Breakables:
 		SelectedTrackerTargetCategory = TrackerTargetCategory::Monsters;
 		break;
 	case TrackerTargetCategory::Monsters:
@@ -2454,338 +2258,29 @@ void CycleTrackerTargetKeyPressed()
 
 std::optional<int> FindNearestGroundItemId(Point playerPosition)
 {
-	std::optional<int> bestId;
-	int bestDistance = 0;
-
-	for (int y = 0; y < MAXDUNY; ++y) {
-		for (int x = 0; x < MAXDUNX; ++x) {
-			const int itemId = std::abs(dItem[x][y]) - 1;
-			if (itemId < 0 || itemId > MAXITEMS)
-				continue;
-
-			const Item &item = Items[itemId];
-			if (item.isEmpty() || item._iClass == ICLASS_NONE)
-				continue;
-
-			const int distance = playerPosition.WalkingDistance(Point { x, y });
-			if (!bestId || distance < bestDistance) {
-				bestId = itemId;
-				bestDistance = distance;
-			}
-		}
-	}
-
-	return bestId;
-}
-
-struct TrackerCandidate {
-	int id;
-	int distance;
-	StringOrView name;
-};
-
-[[nodiscard]] bool IsBetterTrackerCandidate(const TrackerCandidate &a, const TrackerCandidate &b)
-{
-	if (a.distance != b.distance)
-		return a.distance < b.distance;
-	return a.id < b.id;
-}
-
-[[nodiscard]] std::vector<TrackerCandidate> CollectNearbyItemTrackerCandidates(Point playerPosition, int maxDistance)
-{
-	std::vector<TrackerCandidate> result;
-	result.reserve(ActiveItemCount);
-
-	const int minX = std::max(0, playerPosition.x - maxDistance);
-	const int minY = std::max(0, playerPosition.y - maxDistance);
-	const int maxX = std::min(MAXDUNX - 1, playerPosition.x + maxDistance);
-	const int maxY = std::min(MAXDUNY - 1, playerPosition.y + maxDistance);
-
-	std::array<bool, MAXITEMS + 1> seen {};
-
-	for (int y = minY; y <= maxY; ++y) {
-		for (int x = minX; x <= maxX; ++x) {
-			const int itemId = std::abs(dItem[x][y]) - 1;
-			if (itemId < 0 || itemId > MAXITEMS)
-				continue;
-			if (seen[itemId])
-				continue;
-			seen[itemId] = true;
-
-			const Item &item = Items[itemId];
-			if (item.isEmpty() || item._iClass == ICLASS_NONE)
-				continue;
-
-			const int distance = playerPosition.WalkingDistance(Point { x, y });
-			if (distance > maxDistance)
-				continue;
-
-			result.push_back(TrackerCandidate {
-			    .id = itemId,
-			    .distance = distance,
-			    .name = item.getName(),
-			});
-		}
-	}
-
-	std::sort(result.begin(), result.end(), [](const TrackerCandidate &a, const TrackerCandidate &b) { return IsBetterTrackerCandidate(a, b); });
-	return result;
-}
-
-[[nodiscard]] constexpr bool IsTrackedChestObject(const Object &object)
-{
-	return object.canInteractWith() && (object.IsChest() || object._otype == _object_id::OBJ_SIGNCHEST);
-}
-
-[[nodiscard]] constexpr bool IsTrackedDoorObject(const Object &object)
-{
-	// Only closed doors (solid), because open doors are mostly just floor.
-	return object.isDoor() && object.canInteractWith() && object._oSolidFlag;
-}
-
-[[nodiscard]] constexpr bool IsShrineLikeObject(const Object &object)
-{
-	return object.canInteractWith()
-	    && (object.IsShrine()
-	        || IsAnyOf(object._otype, _object_id::OBJ_BLOODFTN, _object_id::OBJ_PURIFYINGFTN, _object_id::OBJ_GOATSHRINE, _object_id::OBJ_CAULDRON,
-	            _object_id::OBJ_MURKYFTN, _object_id::OBJ_TEARFTN));
-}
-
-[[nodiscard]] constexpr bool IsTrackedBreakableObject(const Object &object)
-{
-	return object.IsBreakable();
-}
-
-[[nodiscard]] constexpr bool IsTrackedMiscInteractableObject(const Object &object)
-{
-	if (!object.canInteractWith())
-		return false;
-	if (object.IsChest() || object._otype == _object_id::OBJ_SIGNCHEST)
-		return false;
-	if (object.isDoor())
-		return false;
-	if (IsShrineLikeObject(object))
-		return false;
-	if (object.IsBreakable())
-		return false;
-	return true;
-}
-
-template <typename Predicate>
-[[nodiscard]] std::vector<TrackerCandidate> CollectNearbyObjectTrackerCandidates(Point playerPosition, int maxDistance, Predicate predicate)
-{
-	std::vector<TrackerCandidate> result;
-	result.reserve(ActiveObjectCount);
-
-	const int minX = std::max(0, playerPosition.x - maxDistance);
-	const int minY = std::max(0, playerPosition.y - maxDistance);
-	const int maxX = std::min(MAXDUNX - 1, playerPosition.x + maxDistance);
-	const int maxY = std::min(MAXDUNY - 1, playerPosition.y + maxDistance);
-
-	std::array<int, MAXOBJECTS> bestDistanceById {};
-	bestDistanceById.fill(std::numeric_limits<int>::max());
-
-	for (int y = minY; y <= maxY; ++y) {
-		for (int x = minX; x <= maxX; ++x) {
-			const int objectId = std::abs(dObject[x][y]) - 1;
-			if (objectId < 0 || objectId >= MAXOBJECTS)
-				continue;
-
-			const Object &object = Objects[objectId];
-			if (object._otype == OBJ_NULL)
-				continue;
-			if (!predicate(object))
-				continue;
-
-			const int distance = playerPosition.WalkingDistance(Point { x, y });
-			if (distance > maxDistance)
-				continue;
-
-			int &bestDistance = bestDistanceById[objectId];
-			if (distance < bestDistance)
-				bestDistance = distance;
-		}
-	}
-
-	for (int objectId = 0; objectId < MAXOBJECTS; ++objectId) {
-		const int distance = bestDistanceById[objectId];
-		if (distance == std::numeric_limits<int>::max())
-			continue;
-
-		const Object &object = Objects[objectId];
-		result.push_back(TrackerCandidate {
-		    .id = objectId,
-		    .distance = distance,
-		    .name = object.name(),
-		});
-	}
-
-	std::sort(result.begin(), result.end(), [](const TrackerCandidate &a, const TrackerCandidate &b) { return IsBetterTrackerCandidate(a, b); });
-	return result;
-}
-
-template <typename Predicate>
-[[nodiscard]] std::optional<int> FindNearestObjectId(Point playerPosition, Predicate predicate)
-{
-	std::array<int, MAXOBJECTS> bestDistanceById {};
-	bestDistanceById.fill(std::numeric_limits<int>::max());
-
-	for (int y = 0; y < MAXDUNY; ++y) {
-		for (int x = 0; x < MAXDUNX; ++x) {
-			const int objectId = std::abs(dObject[x][y]) - 1;
-			if (objectId < 0 || objectId >= MAXOBJECTS)
-				continue;
-
-			const Object &object = Objects[objectId];
-			if (object._otype == OBJ_NULL)
-				continue;
-			if (!predicate(object))
-				continue;
-
-			const int distance = playerPosition.WalkingDistance(Point { x, y });
-			int &bestDistance = bestDistanceById[objectId];
-			if (distance < bestDistance)
-				bestDistance = distance;
-		}
-	}
+	if (ActiveItemCount == 0)
+		return std::nullopt;
 
 	std::optional<int> bestId;
 	int bestDistance = 0;
-	for (int objectId = 0; objectId < MAXOBJECTS; ++objectId) {
-		const int distance = bestDistanceById[objectId];
-		if (distance == std::numeric_limits<int>::max())
+
+	for (uint8_t i = 0; i < ActiveItemCount; i++) {
+		const int itemId = ActiveItems[i];
+		if (itemId < 0 || itemId > MAXITEMS)
 			continue;
 
+		const Item &item = Items[itemId];
+		if (item._iClass == ICLASS_NONE)
+			continue;
+
+		const int distance = playerPosition.WalkingDistance(item.position);
 		if (!bestId || distance < bestDistance) {
-			bestId = objectId;
+			bestId = itemId;
 			bestDistance = distance;
 		}
 	}
 
 	return bestId;
-}
-
-[[nodiscard]] std::vector<TrackerCandidate> CollectNearbyChestTrackerCandidates(Point playerPosition, int maxDistance)
-{
-	return CollectNearbyObjectTrackerCandidates(playerPosition, maxDistance, IsTrackedChestObject);
-}
-
-[[nodiscard]] std::vector<TrackerCandidate> CollectNearbyDoorTrackerCandidates(Point playerPosition, int maxDistance)
-{
-	return CollectNearbyObjectTrackerCandidates(playerPosition, maxDistance, IsTrackedDoorObject);
-}
-
-[[nodiscard]] std::vector<TrackerCandidate> CollectNearbyShrineTrackerCandidates(Point playerPosition, int maxDistance)
-{
-	return CollectNearbyObjectTrackerCandidates(playerPosition, maxDistance, IsShrineLikeObject);
-}
-
-[[nodiscard]] std::vector<TrackerCandidate> CollectNearbyBreakableTrackerCandidates(Point playerPosition, int maxDistance)
-{
-	return CollectNearbyObjectTrackerCandidates(playerPosition, maxDistance, IsTrackedBreakableObject);
-}
-
-[[nodiscard]] std::vector<TrackerCandidate> CollectNearbyObjectInteractableTrackerCandidates(Point playerPosition, int maxDistance)
-{
-	return CollectNearbyObjectTrackerCandidates(playerPosition, maxDistance, IsTrackedMiscInteractableObject);
-}
-
-[[nodiscard]] std::vector<TrackerCandidate> CollectNearbyMonsterTrackerCandidates(Point playerPosition, int maxDistance)
-{
-	std::vector<TrackerCandidate> result;
-	result.reserve(ActiveMonsterCount);
-
-	const int minX = std::max(0, playerPosition.x - maxDistance);
-	const int minY = std::max(0, playerPosition.y - maxDistance);
-	const int maxX = std::min(MAXDUNX - 1, playerPosition.x + maxDistance);
-	const int maxY = std::min(MAXDUNY - 1, playerPosition.y + maxDistance);
-
-	std::array<bool, MaxMonsters> seen {};
-
-	for (int y = minY; y <= maxY; ++y) {
-		for (int x = minX; x <= maxX; ++x) {
-			const int monsterId = std::abs(dMonster[x][y]) - 1;
-			if (monsterId < 0 || monsterId >= static_cast<int>(MaxMonsters))
-				continue;
-			if (seen[monsterId])
-				continue;
-			seen[monsterId] = true;
-
-			const Monster &monster = Monsters[monsterId];
-			if (monster.isInvalid)
-				continue;
-			if ((monster.flags & MFLAG_HIDDEN) != 0)
-				continue;
-			if (monster.hitPoints <= 0)
-				continue;
-
-			const Point monsterPosition { monster.position.tile };
-			const int distance = playerPosition.WalkingDistance(monsterPosition);
-			if (distance > maxDistance)
-				continue;
-
-			result.push_back(TrackerCandidate {
-			    .id = monsterId,
-			    .distance = distance,
-			    .name = monster.name(),
-			});
-		}
-	}
-
-	std::sort(result.begin(), result.end(), [](const TrackerCandidate &a, const TrackerCandidate &b) { return IsBetterTrackerCandidate(a, b); });
-	return result;
-}
-
-[[nodiscard]] std::optional<int> FindNextTrackerCandidateId(const std::vector<TrackerCandidate> &candidates, int currentId)
-{
-	if (candidates.empty())
-		return std::nullopt;
-	if (currentId < 0)
-		return candidates.front().id;
-
-	const auto it = std::find_if(candidates.begin(), candidates.end(), [currentId](const TrackerCandidate &c) { return c.id == currentId; });
-	if (it == candidates.end())
-		return candidates.front().id;
-
-	if (candidates.size() <= 1)
-		return std::nullopt;
-
-	const size_t idx = static_cast<size_t>(it - candidates.begin());
-	const size_t nextIdx = (idx + 1) % candidates.size();
-	return candidates[nextIdx].id;
-}
-
-void DecorateTrackerTargetNameWithOrdinalIfNeeded(int targetId, StringOrView &targetName, const std::vector<TrackerCandidate> &candidates)
-{
-	if (targetName.empty())
-		return;
-
-	const std::string_view baseName = targetName.str();
-	int total = 0;
-	for (const TrackerCandidate &c : candidates) {
-		if (c.name.str() == baseName)
-			++total;
-	}
-	if (total <= 1)
-		return;
-
-	int ordinal = 0;
-	int seen = 0;
-	for (const TrackerCandidate &c : candidates) {
-		if (c.name.str() != baseName)
-			continue;
-		++seen;
-		if (c.id == targetId) {
-			ordinal = seen;
-			break;
-		}
-	}
-	if (ordinal <= 0)
-		return;
-
-	std::string decorated;
-	StrAppend(decorated, baseName, " ", ordinal);
-	targetName = std::move(decorated);
 }
 
 [[nodiscard]] bool IsGroundItemPresent(int itemId)
@@ -2803,59 +2298,59 @@ void DecorateTrackerTargetNameWithOrdinalIfNeeded(int targetId, StringOrView &ta
 
 std::optional<int> FindNearestUnopenedChestObjectId(Point playerPosition)
 {
-	return FindNearestObjectId(playerPosition, IsTrackedChestObject);
-}
+	if (ActiveObjectCount == 0)
+		return std::nullopt;
 
-std::optional<int> FindNearestClosedDoorObjectId(Point playerPosition)
-{
-	return FindNearestObjectId(playerPosition, IsTrackedDoorObject);
-}
+	std::optional<int> bestId;
+	int bestDistance = 0;
 
-std::optional<int> FindNearestShrineObjectId(Point playerPosition)
-{
-	return FindNearestObjectId(playerPosition, IsShrineLikeObject);
-}
+	for (int i = 0; i < ActiveObjectCount; i++) {
+		const int objectId = ActiveObjects[i];
+		if (objectId < 0 || objectId >= MAXOBJECTS)
+			continue;
 
-std::optional<int> FindNearestBreakableObjectId(Point playerPosition)
-{
-	return FindNearestObjectId(playerPosition, IsTrackedBreakableObject);
-}
+		const Object &object = Objects[objectId];
+		if (!object.canInteractWith())
+			continue;
+		if (!object.IsChest())
+			continue;
 
-std::optional<int> FindNearestMiscInteractableObjectId(Point playerPosition)
-{
-	return FindNearestObjectId(playerPosition, IsTrackedMiscInteractableObject);
+		const int distance = playerPosition.WalkingDistance(object.position);
+		if (!bestId || distance < bestDistance) {
+			bestId = objectId;
+			bestDistance = distance;
+		}
+	}
+
+	return bestId;
 }
 
 std::optional<int> FindNearestMonsterId(Point playerPosition)
 {
+	if (ActiveMonsterCount == 0)
+		return std::nullopt;
+
 	std::optional<int> bestId;
 	int bestDistance = 0;
 
-	std::array<bool, MaxMonsters> seen {};
+	for (size_t i = 0; i < ActiveMonsterCount; i++) {
+		const int monsterId = static_cast<int>(ActiveMonsters[i]);
+		if (monsterId < 0 || monsterId >= static_cast<int>(MaxMonsters))
+			continue;
 
-	for (int y = 0; y < MAXDUNY; ++y) {
-		for (int x = 0; x < MAXDUNX; ++x) {
-			const int monsterId = std::abs(dMonster[x][y]) - 1;
-			if (monsterId < 0 || monsterId >= static_cast<int>(MaxMonsters))
-				continue;
-			if (seen[monsterId])
-				continue;
-			seen[monsterId] = true;
+		const Monster &monster = Monsters[monsterId];
+		if (monster.isInvalid)
+			continue;
+		if ((monster.flags & MFLAG_HIDDEN) != 0)
+			continue;
+		if (monster.hitPoints <= 0)
+			continue;
 
-			const Monster &monster = Monsters[monsterId];
-			if (monster.isInvalid)
-				continue;
-			if ((monster.flags & MFLAG_HIDDEN) != 0)
-				continue;
-			if (monster.hitPoints <= 0)
-				continue;
-
-			const Point monsterPosition { monster.position.tile };
-			const int distance = playerPosition.WalkingDistance(monsterPosition);
-			if (!bestId || distance < bestDistance) {
-				bestId = monsterId;
-				bestDistance = distance;
-			}
+		const Point monsterPosition { monster.position.tile };
+		const int distance = playerPosition.WalkingDistance(monsterPosition);
+		if (!bestId || distance < bestDistance) {
+			bestId = monsterId;
+			bestDistance = distance;
 		}
 	}
 
@@ -2885,15 +2380,6 @@ std::optional<Point> FindBestAdjacentApproachTile(const Player &player, Point pl
 	}
 
 	return best;
-}
-
-std::optional<Point> FindBestApproachTileForObject(const Player &player, Point playerPosition, const Object &object)
-{
-	// Some interactable objects are placed on a walkable tile (e.g. floor switches). Prefer stepping on the tile in that case.
-	if (!object._oSolidFlag && PosOkPlayer(player, object.position))
-		return object.position;
-
-	return FindBestAdjacentApproachTile(player, playerPosition, object.position);
 }
 
 bool PosOkPlayerIgnoreDoors(const Player &player, Point position)
@@ -2956,7 +2442,7 @@ void NavigateToTrackerTargetKeyPressed()
 	EnsureTrackerLocksMatchCurrentLevel();
 
 	const SDL_Keymod modState = SDL_GetModState();
-	const bool cycleTarget = (modState & SDL_KMOD_SHIFT) != 0;
+	const bool forceRetarget = (modState & SDL_KMOD_SHIFT) != 0;
 	const bool clearTarget = (modState & SDL_KMOD_CTRL) != 0;
 
 	const Point playerPosition = MyPlayer->position.future;
@@ -2975,17 +2461,7 @@ void NavigateToTrackerTargetKeyPressed()
 
 	switch (SelectedTrackerTargetCategory) {
 	case TrackerTargetCategory::Items: {
-		const std::vector<TrackerCandidate> nearbyCandidates = CollectNearbyItemTrackerCandidates(playerPosition, TrackerCycleDistanceTiles);
-		if (cycleTarget) {
-			targetId = FindNextTrackerCandidateId(nearbyCandidates, lockedTargetId);
-			if (!targetId) {
-				if (nearbyCandidates.empty())
-					SpeakText(_("No items found."), true);
-				else
-					SpeakText(_("No next item."), true);
-				return;
-			}
-		} else if (IsGroundItemPresent(lockedTargetId)) {
+		if (!forceRetarget && IsGroundItemPresent(lockedTargetId)) {
 			targetId = lockedTargetId;
 		} else {
 			targetId = FindNearestGroundItemId(playerPosition);
@@ -3005,22 +2481,11 @@ void NavigateToTrackerTargetKeyPressed()
 		const Item &tracked = Items[*targetId];
 
 		targetName = tracked.getName();
-		DecorateTrackerTargetNameWithOrdinalIfNeeded(*targetId, targetName, nearbyCandidates);
 		targetPosition = tracked.position;
 		break;
 	}
 	case TrackerTargetCategory::Chests: {
-		const std::vector<TrackerCandidate> nearbyCandidates = CollectNearbyChestTrackerCandidates(playerPosition, TrackerCycleDistanceTiles);
-		if (cycleTarget) {
-			targetId = FindNextTrackerCandidateId(nearbyCandidates, lockedTargetId);
-			if (!targetId) {
-				if (nearbyCandidates.empty())
-					SpeakText(_("No chests found."), true);
-				else
-					SpeakText(_("No next chest."), true);
-				return;
-			}
-		} else if (lockedTargetId >= 0 && lockedTargetId < MAXOBJECTS) {
+		if (!forceRetarget && lockedTargetId >= 0 && lockedTargetId < MAXOBJECTS) {
 			targetId = lockedTargetId;
 		} else {
 			targetId = FindNearestUnopenedChestObjectId(playerPosition);
@@ -3031,7 +2496,7 @@ void NavigateToTrackerTargetKeyPressed()
 		}
 
 		const Object &object = Objects[*targetId];
-		if (!IsTrackedChestObject(object)) {
+		if (!object.IsChest() || !object.canInteractWith()) {
 			lockedTargetId = -1;
 			targetId = FindNearestUnopenedChestObjectId(playerPosition);
 			if (!targetId) {
@@ -3044,209 +2509,16 @@ void NavigateToTrackerTargetKeyPressed()
 		const Object &tracked = Objects[*targetId];
 
 		targetName = tracked.name();
-		DecorateTrackerTargetNameWithOrdinalIfNeeded(*targetId, targetName, nearbyCandidates);
-		if (!cycleTarget) {
-			targetPosition = FindBestApproachTileForObject(*MyPlayer, playerPosition, tracked);
-			if (!targetPosition) {
-				SpeakText(_("Can't find a nearby tile to walk to."), true);
-				return;
-			}
-		}
-		break;
-	}
-	case TrackerTargetCategory::Doors: {
-		const std::vector<TrackerCandidate> nearbyCandidates = CollectNearbyDoorTrackerCandidates(playerPosition, TrackerCycleDistanceTiles);
-		if (cycleTarget) {
-			targetId = FindNextTrackerCandidateId(nearbyCandidates, lockedTargetId);
-			if (!targetId) {
-				if (nearbyCandidates.empty())
-					SpeakText(_("No doors found."), true);
-				else
-					SpeakText(_("No next door."), true);
-				return;
-			}
-		} else if (lockedTargetId >= 0 && lockedTargetId < MAXOBJECTS) {
-			targetId = lockedTargetId;
-		} else {
-			targetId = FindNearestClosedDoorObjectId(playerPosition);
-		}
-		if (!targetId) {
-			SpeakText(_("No doors found."), true);
+		targetPosition = FindBestAdjacentApproachTile(*MyPlayer, playerPosition, tracked.position);
+		if (!targetPosition) {
+			SpeakText(_("Can't find a nearby tile to walk to."), true);
 			return;
-		}
-
-		const Object &object = Objects[*targetId];
-		if (!IsTrackedDoorObject(object)) {
-			lockedTargetId = -1;
-			targetId = FindNearestClosedDoorObjectId(playerPosition);
-			if (!targetId) {
-				SpeakText(_("No doors found."), true);
-				return;
-			}
-		}
-
-		lockedTargetId = *targetId;
-		const Object &tracked = Objects[*targetId];
-
-		targetName = tracked.name();
-		DecorateTrackerTargetNameWithOrdinalIfNeeded(*targetId, targetName, nearbyCandidates);
-		if (!cycleTarget) {
-			targetPosition = FindBestApproachTileForObject(*MyPlayer, playerPosition, tracked);
-			if (!targetPosition) {
-				SpeakText(_("Can't find a nearby tile to walk to."), true);
-				return;
-			}
-		}
-		break;
-	}
-	case TrackerTargetCategory::Shrines: {
-		const std::vector<TrackerCandidate> nearbyCandidates = CollectNearbyShrineTrackerCandidates(playerPosition, TrackerCycleDistanceTiles);
-		if (cycleTarget) {
-			targetId = FindNextTrackerCandidateId(nearbyCandidates, lockedTargetId);
-			if (!targetId) {
-				if (nearbyCandidates.empty())
-					SpeakText(_("No shrines found."), true);
-				else
-					SpeakText(_("No next shrine."), true);
-				return;
-			}
-		} else if (lockedTargetId >= 0 && lockedTargetId < MAXOBJECTS) {
-			targetId = lockedTargetId;
-		} else {
-			targetId = FindNearestShrineObjectId(playerPosition);
-		}
-		if (!targetId) {
-			SpeakText(_("No shrines found."), true);
-			return;
-		}
-
-		const Object &object = Objects[*targetId];
-		if (!IsShrineLikeObject(object)) {
-			lockedTargetId = -1;
-			targetId = FindNearestShrineObjectId(playerPosition);
-			if (!targetId) {
-				SpeakText(_("No shrines found."), true);
-				return;
-			}
-		}
-
-		lockedTargetId = *targetId;
-		const Object &tracked = Objects[*targetId];
-
-		targetName = tracked.name();
-		DecorateTrackerTargetNameWithOrdinalIfNeeded(*targetId, targetName, nearbyCandidates);
-		if (!cycleTarget) {
-			targetPosition = FindBestApproachTileForObject(*MyPlayer, playerPosition, tracked);
-			if (!targetPosition) {
-				SpeakText(_("Can't find a nearby tile to walk to."), true);
-				return;
-			}
-		}
-		break;
-	}
-	case TrackerTargetCategory::Objects: {
-		const std::vector<TrackerCandidate> nearbyCandidates = CollectNearbyObjectInteractableTrackerCandidates(playerPosition, TrackerCycleDistanceTiles);
-		if (cycleTarget) {
-			targetId = FindNextTrackerCandidateId(nearbyCandidates, lockedTargetId);
-			if (!targetId) {
-				if (nearbyCandidates.empty())
-					SpeakText(_("No objects found."), true);
-				else
-					SpeakText(_("No next object."), true);
-				return;
-			}
-		} else if (lockedTargetId >= 0 && lockedTargetId < MAXOBJECTS) {
-			targetId = lockedTargetId;
-		} else {
-			targetId = FindNearestMiscInteractableObjectId(playerPosition);
-		}
-		if (!targetId) {
-			SpeakText(_("No objects found."), true);
-			return;
-		}
-
-		const Object &object = Objects[*targetId];
-		if (!IsTrackedMiscInteractableObject(object)) {
-			lockedTargetId = -1;
-			targetId = FindNearestMiscInteractableObjectId(playerPosition);
-			if (!targetId) {
-				SpeakText(_("No objects found."), true);
-				return;
-			}
-		}
-
-		lockedTargetId = *targetId;
-		const Object &tracked = Objects[*targetId];
-
-		targetName = tracked.name();
-		DecorateTrackerTargetNameWithOrdinalIfNeeded(*targetId, targetName, nearbyCandidates);
-		if (!cycleTarget) {
-			targetPosition = FindBestApproachTileForObject(*MyPlayer, playerPosition, tracked);
-			if (!targetPosition) {
-				SpeakText(_("Can't find a nearby tile to walk to."), true);
-				return;
-			}
-		}
-		break;
-	}
-	case TrackerTargetCategory::Breakables: {
-		const std::vector<TrackerCandidate> nearbyCandidates = CollectNearbyBreakableTrackerCandidates(playerPosition, TrackerCycleDistanceTiles);
-		if (cycleTarget) {
-			targetId = FindNextTrackerCandidateId(nearbyCandidates, lockedTargetId);
-			if (!targetId) {
-				if (nearbyCandidates.empty())
-					SpeakText(_("No breakables found."), true);
-				else
-					SpeakText(_("No next breakable."), true);
-				return;
-			}
-		} else if (lockedTargetId >= 0 && lockedTargetId < MAXOBJECTS) {
-			targetId = lockedTargetId;
-		} else {
-			targetId = FindNearestBreakableObjectId(playerPosition);
-		}
-		if (!targetId) {
-			SpeakText(_("No breakables found."), true);
-			return;
-		}
-
-		const Object &object = Objects[*targetId];
-		if (!IsTrackedBreakableObject(object)) {
-			lockedTargetId = -1;
-			targetId = FindNearestBreakableObjectId(playerPosition);
-			if (!targetId) {
-				SpeakText(_("No breakables found."), true);
-				return;
-			}
-		}
-
-		lockedTargetId = *targetId;
-		const Object &tracked = Objects[*targetId];
-
-		targetName = tracked.name();
-		DecorateTrackerTargetNameWithOrdinalIfNeeded(*targetId, targetName, nearbyCandidates);
-		if (!cycleTarget) {
-			targetPosition = FindBestApproachTileForObject(*MyPlayer, playerPosition, tracked);
-			if (!targetPosition) {
-				SpeakText(_("Can't find a nearby tile to walk to."), true);
-				return;
-			}
 		}
 		break;
 	}
 	case TrackerTargetCategory::Monsters:
 	default:
-		const std::vector<TrackerCandidate> nearbyCandidates = CollectNearbyMonsterTrackerCandidates(playerPosition, TrackerCycleDistanceTiles);
-		if (cycleTarget) {
-			targetId = FindNextTrackerCandidateId(nearbyCandidates, lockedTargetId);
-			if (!targetId) {
-				if (nearbyCandidates.empty())
-					SpeakText(_("No monsters found."), true);
-				else
-					SpeakText(_("No next monster."), true);
-				return;
-			}
-		} else if (lockedTargetId >= 0 && lockedTargetId < static_cast<int>(MaxMonsters)) {
+		if (!forceRetarget && lockedTargetId >= 0 && lockedTargetId < static_cast<int>(MaxMonsters)) {
 			targetId = lockedTargetId;
 		} else {
 			targetId = FindNearestMonsterId(playerPosition);
@@ -3270,21 +2542,13 @@ void NavigateToTrackerTargetKeyPressed()
 		const Monster &tracked = Monsters[*targetId];
 
 		targetName = tracked.name();
-		DecorateTrackerTargetNameWithOrdinalIfNeeded(*targetId, targetName, nearbyCandidates);
-		if (!cycleTarget) {
-			const Point monsterPosition { tracked.position.tile };
-			targetPosition = FindBestAdjacentApproachTile(*MyPlayer, playerPosition, monsterPosition);
-			if (!targetPosition) {
-				SpeakText(_("Can't find a nearby tile to walk to."), true);
-				return;
-			}
+		const Point monsterPosition { tracked.position.tile };
+		targetPosition = FindBestAdjacentApproachTile(*MyPlayer, playerPosition, monsterPosition);
+		if (!targetPosition) {
+			SpeakText(_("Can't find a nearby tile to walk to."), true);
+			return;
 		}
 		break;
-	}
-
-	if (cycleTarget) {
-		SpeakText(targetName.str(), /*force=*/true);
-		return;
 	}
 
 	if (!targetPosition) {
@@ -3906,45 +3170,6 @@ std::optional<Point> FindNearestTownPortalOnCurrentLevel()
 	return bestPosition;
 }
 
-struct QuestSetLevelEntrance {
-	_setlevels questLevel;
-	Point entrancePosition;
-	int distance;
-};
-
-std::optional<QuestSetLevelEntrance> FindNearestQuestSetLevelEntranceOnCurrentLevel()
-{
-	if (MyPlayer == nullptr || setlevel)
-		return std::nullopt;
-
-	const Point playerPosition = MyPlayer->position.future;
-	std::optional<QuestSetLevelEntrance> best;
-	int bestDistance = 0;
-
-	for (const Quest &quest : Quests) {
-		if (quest._qslvl == SL_NONE)
-			continue;
-		if (quest._qactive == QUEST_NOTAVAIL)
-			continue;
-		if (quest._qlevel != currlevel)
-			continue;
-		if (!InDungeonBounds(quest.position))
-			continue;
-
-		const int distance = playerPosition.WalkingDistance(quest.position);
-		if (!best || distance < bestDistance) {
-			best = QuestSetLevelEntrance {
-				.questLevel = quest._qslvl,
-				.entrancePosition = quest.position,
-				.distance = distance,
-			};
-			bestDistance = distance;
-		}
-	}
-
-	return best;
-}
-
 void SpeakNearestExitKeyPressed()
 {
 	if (!CanPlayerTakeAction())
@@ -3957,28 +3182,6 @@ void SpeakNearestExitKeyPressed()
 		return;
 
 	const Point startPosition = MyPlayer->position.future;
-
-	const SDL_Keymod modState = SDL_GetModState();
-	const bool seekQuestEntrance = (modState & SDL_KMOD_SHIFT) != 0;
-
-	if (seekQuestEntrance) {
-		if (const std::optional<QuestSetLevelEntrance> entrance = FindNearestQuestSetLevelEntranceOnCurrentLevel(); entrance) {
-			const Point targetPosition = entrance->entrancePosition;
-			const std::optional<std::vector<int8_t>> path = FindKeyboardWalkPathForSpeech(*MyPlayer, startPosition, targetPosition);
-
-			std::string message { _(QuestLevelNames[entrance->questLevel]) };
-			message.append(": ");
-			if (!path)
-				AppendDirectionalFallback(message, targetPosition - startPosition);
-			else
-				AppendKeyboardWalkPathForSpeech(message, *path);
-			SpeakText(message, true);
-			return;
-		}
-
-		SpeakText(_("No quest entrances found."), true);
-		return;
-	}
 
 	if (leveltype != DTYPE_TOWN) {
 		if (const std::optional<Point> portalPosition = FindNearestTownPortalOnCurrentLevel(); portalPosition) {
@@ -4160,105 +3363,6 @@ void SpeakNearestUnexploredTileKeyPressed()
 		AppendKeyboardWalkPathForSpeech(message, *path);
 
 	SpeakText(message, true);
-}
-
-void SpeakPlayerHealthPercentageKeyPressed()
-{
-	if (!CanPlayerTakeAction())
-		return;
-	if (MyPlayer == nullptr)
-		return;
-
-	const int maxHp = MyPlayer->_pMaxHP;
-	if (maxHp <= 0)
-		return;
-
-	const int currentHp = std::max(MyPlayer->_pHitPoints, 0);
-	int hpPercent = static_cast<int>((static_cast<int64_t>(currentHp) * 100 + maxHp / 2) / maxHp);
-	hpPercent = std::clamp(hpPercent, 0, 100);
-	SpeakText(fmt::format("{:d}%", hpPercent), /*force=*/true);
-}
-
-void SpeakExperienceToNextLevelKeyPressed()
-{
-	if (!CanPlayerTakeAction())
-		return;
-	if (MyPlayer == nullptr)
-		return;
-
-	const Player &myPlayer = *MyPlayer;
-	if (myPlayer.isMaxCharacterLevel()) {
-		SpeakText(_("Max level."), /*force=*/true);
-		return;
-	}
-
-	const uint32_t nextExperienceThreshold = myPlayer.getNextExperienceThreshold();
-	const uint32_t currentExperience = myPlayer._pExperience;
-	const uint32_t remainingExperience = currentExperience >= nextExperienceThreshold ? 0 : nextExperienceThreshold - currentExperience;
-	const int nextLevel = myPlayer.getCharacterLevel() + 1;
-	SpeakText(
-	    fmt::format(fmt::runtime(_("{:s} to Level {:d}")), FormatInteger(remainingExperience), nextLevel),
-	    /*force=*/true);
-}
-
-namespace {
-std::string BuildCurrentLocationForSpeech()
-{
-	// Quest Level Name
-	if (setlevel) {
-		const char *const questLevelName = QuestLevelNames[setlvlnum];
-		if (questLevelName == nullptr || questLevelName[0] == '\0')
-			return std::string { _("Set level") };
-
-		return fmt::format("{:s}: {:s}", _("Set level"), _(questLevelName));
-	}
-
-	// Dungeon Name
-	constexpr std::array<const char *, DTYPE_LAST + 1> DungeonStrs = {
-		N_("Town"),
-		N_("Cathedral"),
-		N_("Catacombs"),
-		N_("Caves"),
-		N_("Hell"),
-		N_("Nest"),
-		N_("Crypt"),
-	};
-	std::string dungeonStr;
-	if (leveltype >= DTYPE_TOWN && leveltype <= DTYPE_LAST) {
-		dungeonStr = _(DungeonStrs[static_cast<size_t>(leveltype)]);
-	} else {
-		dungeonStr = _(/* TRANSLATORS: type of dungeon (i.e. Cathedral, Caves)*/ "None");
-	}
-
-	if (leveltype == DTYPE_TOWN || currlevel <= 0)
-		return dungeonStr;
-
-	// Dungeon Level
-	int level = currlevel;
-	if (leveltype == DTYPE_CATACOMBS)
-		level -= 4;
-	else if (leveltype == DTYPE_CAVES)
-		level -= 8;
-	else if (leveltype == DTYPE_HELL)
-		level -= 12;
-	else if (leveltype == DTYPE_NEST)
-		level -= 16;
-	else if (leveltype == DTYPE_CRYPT)
-		level -= 20;
-
-	if (level <= 0)
-		return dungeonStr;
-
-	return fmt::format(fmt::runtime(_(/* TRANSLATORS: dungeon type and floor number i.e. "Cathedral 3"*/ "{} {}")), dungeonStr, level);
-}
-} // namespace
-
-void SpeakCurrentLocationKeyPressed()
-{
-	if (!CanPlayerTakeAction())
-		return;
-
-	SpeakText(BuildCurrentLocationForSpeech(), /*force=*/true);
 }
 
 void InventoryKeyPressed()
@@ -4649,7 +3753,7 @@ void InitKeymapActions()
 	options.Keymapper.AddAction(
 	    "SpeakNearestExit",
 	    N_("Nearest exit"),
-	    N_("Speaks the nearest exit. Hold Shift for quest entrances."),
+	    N_("Speaks the nearest exit."),
 	    'E',
 	    SpeakNearestExitKeyPressed,
 	    nullptr,
@@ -4673,7 +3777,7 @@ void InitKeymapActions()
 	options.Keymapper.AddAction(
 	    "CycleTrackerTarget",
 	    N_("Cycle tracker target"),
-	    N_("Cycles what the tracker looks for (items, chests, doors, shrines, objects, breakables, monsters)."),
+	    N_("Cycles what the tracker looks for (items, chests, monsters)."),
 	    'T',
 	    CycleTrackerTargetKeyPressed,
 	    nullptr,
@@ -4681,7 +3785,7 @@ void InitKeymapActions()
 	options.Keymapper.AddAction(
 	    "NavigateToTrackerTarget",
 	    N_("Tracker directions"),
-	    N_("Speaks directions to a tracked target of the selected tracker category. Shift+N: cycle targets (speaks name only). Ctrl+N: clear target."),
+	    N_("Speaks directions to a tracked target of the selected tracker category. Hold Shift to retarget; hold Ctrl to clear."),
 	    'N',
 	    NavigateToTrackerTargetKeyPressed,
 	    nullptr,
@@ -4814,27 +3918,11 @@ void InitKeymapActions()
 	    "Zoom",
 	    N_("Zoom"),
 	    N_("Zoom Game Screen."),
-	    SDLK_UNKNOWN,
+	    'Z',
 	    [] {
 		    GetOptions().Graphics.zoom.SetValue(!*GetOptions().Graphics.zoom);
 		    CalcViewportGeometry();
 	    },
-	    nullptr,
-	    CanPlayerTakeAction);
-	options.Keymapper.AddAction(
-	    "SpeakPlayerHealthPercentage",
-	    N_("Health percentage"),
-	    N_("Speaks the player's health as a percentage."),
-	    'Z',
-	    SpeakPlayerHealthPercentageKeyPressed,
-	    nullptr,
-	    CanPlayerTakeAction);
-	options.Keymapper.AddAction(
-	    "SpeakExperienceToNextLevel",
-	    N_("Experience to level"),
-	    N_("Speaks how much experience remains to reach the next level."),
-	    'X',
-	    SpeakExperienceToNextLevelKeyPressed,
 	    nullptr,
 	    CanPlayerTakeAction);
 	options.Keymapper.AddAction(
@@ -4898,18 +3986,10 @@ void InitKeymapActions()
 	    "ChatLog",
 	    N_("Chat Log"),
 	    N_("Displays chat log."),
-	    SDLK_INSERT,
+	    'L',
 	    [] {
 		    ToggleChatLog();
 	    });
-	options.Keymapper.AddAction(
-	    "SpeakCurrentLocation",
-	    N_("Location"),
-	    N_("Speaks the current dungeon and floor."),
-	    'L',
-	    SpeakCurrentLocationKeyPressed,
-	    nullptr,
-	    CanPlayerTakeAction);
 	options.Keymapper.AddAction(
 	    "SortInv",
 	    N_("Sort Inventory"),
@@ -6249,8 +5329,6 @@ tl::expected<void, std::string> LoadGameLevel(bool firstflag, lvl_entry lvldir)
 	CompleteProgress();
 
 	LoadGameLevelCalculateCursor();
-	if (leveltype != DTYPE_TOWN)
-		SpeakText(BuildCurrentLocationForSpeech(), /*force=*/true);
 	return {};
 }
 
