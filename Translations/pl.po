@@ -6497,22 +6497,6 @@ msgid "Speaks how much experience remains to reach the next level."
 msgstr "Czyta, ile doświadczenia brakuje do następnego poziomu."
 
 #: Source/diablo.cpp
-msgid "Location"
-msgstr "Lokalizacja"
-
-#: Source/diablo.cpp
-msgid "Speaks the current dungeon and floor."
-msgstr "Czyta nazwę lochu i numer poziomu."
-
-#: Source/diablo.cpp
-msgid "Low durability: {:s}"
-msgstr "Niska trwałość: {:s}"
-
-#: Source/diablo.cpp
-msgid "{:s} health: {:d}%"
-msgstr "{:s} zdrowie: {:d}%"
-
-#: Source/diablo.cpp
 msgid "Max level."
 msgstr "Maksymalny poziom."
 
@@ -6523,22 +6507,6 @@ msgstr "Nie ma następnego przedmiotu."
 #: Source/diablo.cpp
 msgid "No next chest."
 msgstr "Nie ma następnej skrzyni."
-
-#: Source/diablo.cpp
-msgid "No next door."
-msgstr "Nie ma następnych drzwi."
-
-#: Source/diablo.cpp
-msgid "No next shrine."
-msgstr "Nie ma następnej kapliczki."
-
-#: Source/diablo.cpp
-msgid "No next object."
-msgstr "Nie ma następnego obiektu."
-
-#: Source/diablo.cpp
-msgid "No next breakable."
-msgstr "Nie ma następnego niszczalnego obiektu."
 
 #: Source/diablo.cpp
 msgid "No next monster."
@@ -12063,10 +12031,6 @@ msgid "No exits found."
 msgstr "Nie znaleziono wyjść."
 
 #: Source/diablo.cpp
-msgid "No quest entrances found."
-msgstr "Nie znaleziono wejść questowych."
-
-#: Source/diablo.cpp
 msgid "Not in town."
 msgstr "Nie jesteś w mieście."
 
@@ -12085,14 +12049,6 @@ msgstr "Najbliższe schody w górę"
 #: Source/diablo.cpp
 msgid "Speaks directions to the nearest stairs up."
 msgstr "Podaje wskazówki dojścia do najbliższych schodów w górę."
-
-#: Source/diablo.cpp
-msgid "Nearest exit"
-msgstr "Najbliższe wyjście"
-
-#: Source/diablo.cpp
-msgid "Speaks the nearest exit. Hold Shift for quest entrances."
-msgstr "Podaje wskazówki dojścia do najbliższego wyjścia. Przytrzymaj Shift, aby namierzyć wejścia questowe."
 
 #: Source/diablo.cpp
 msgid "Nearest exit: "
@@ -12179,8 +12135,8 @@ msgid "Cycle tracker target"
 msgstr "Zmień cel trackera"
 
 #: Source/diablo.cpp
-msgid "Cycles what the tracker looks for (items, chests, doors, shrines, objects, breakables, monsters)."
-msgstr "Zmienia, czego szuka tracker (przedmioty, skrzynie, drzwi, kapliczki, obiekty, niszczalne, potwory)."
+msgid "Cycles what the tracker looks for (items, chests, monsters)."
+msgstr "Zmienia, czego szuka tracker (przedmioty, skrzynie, potwory)."
 
 #: Source/diablo.cpp
 msgid "Navigate to tracker target"
@@ -12203,22 +12159,6 @@ msgid "chests"
 msgstr "skrzynie"
 
 #: Source/diablo.cpp
-msgid "doors"
-msgstr "drzwi"
-
-#: Source/diablo.cpp
-msgid "shrines"
-msgstr "kapliczki"
-
-#: Source/diablo.cpp
-msgid "objects"
-msgstr "obiekty"
-
-#: Source/diablo.cpp
-msgid "breakables"
-msgstr "niszczalne"
-
-#: Source/diablo.cpp
 msgid "monsters"
 msgstr "potwory"
 
@@ -12229,22 +12169,6 @@ msgstr "Nie znaleziono żadnych przedmiotów."
 #: Source/diablo.cpp
 msgid "No chests found."
 msgstr "Nie znaleziono żadnych skrzyń."
-
-#: Source/diablo.cpp
-msgid "No doors found."
-msgstr "Nie znaleziono żadnych drzwi."
-
-#: Source/diablo.cpp
-msgid "No shrines found."
-msgstr "Nie znaleziono żadnych kapliczek."
-
-#: Source/diablo.cpp
-msgid "No objects found."
-msgstr "Nie znaleziono żadnych obiektów."
-
-#: Source/diablo.cpp
-msgid "No breakables found."
-msgstr "Nie znaleziono żadnych niszczalnych obiektów."
 
 #: Source/diablo.cpp
 msgid "No monsters found."
@@ -12311,6 +12235,10 @@ msgid "Right ring"
 msgstr "Prawy pierścień"
 
 #: Source/controls/plrctrls.cpp
+msgid "Amulet"
+msgstr "Amulet"
+
+#: Source/controls/plrctrls.cpp
 msgid "Left hand"
 msgstr "Lewa ręka"
 
@@ -12319,8 +12247,16 @@ msgid "Right hand"
 msgstr "Prawa ręka"
 
 #: Source/controls/plrctrls.cpp
+msgid "Chest"
+msgstr "Tułów"
+
+#: Source/controls/plrctrls.cpp
 msgid "Belt"
 msgstr "Pas"
+
+#: Source/controls/plrctrls.cpp
+msgid "Inventory"
+msgstr "Ekwipunek"
 
 #: Source/controls/plrctrls.cpp
 msgid "empty"
