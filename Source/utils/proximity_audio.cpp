@@ -322,6 +322,10 @@ void UpdateProximityAudioCues()
 		return;
 	if (InGameMenu())
 		return;
+	if (invflag) {
+		SoundPool::Get().UpdateEmitters({}, SDL_GetTicks());
+		return;
+	}
 
 	SoundPool &pool = SoundPool::Get();
 	EnsureNavigationSoundsLoaded(pool);

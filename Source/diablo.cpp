@@ -181,13 +181,8 @@ char gszVersionNumber[64] = "internal version unknown";
  void UpdateAutoWalkTracker();
  void SpeakSelectedSpeedbookSpell();
  void SpellBookKeyPressed();
-std::optional<std::vector<int8_t>> FindKeyboardWalkPathForSpeech(const Player &player, Point startPosition, Point destinationPosition, bool allowDestinationNonWalkable = false);
-std::optional<std::vector<int8_t>> FindKeyboardWalkPathForSpeechRespectingDoors(const Player &player, Point startPosition, Point destinationPosition, bool allowDestinationNonWalkable = false);
-std::optional<std::vector<int8_t>> FindKeyboardWalkPathForSpeechIgnoringMonsters(const Player &player, Point startPosition, Point destinationPosition, bool allowDestinationNonWalkable = false);
-std::optional<std::vector<int8_t>> FindKeyboardWalkPathForSpeechRespectingDoorsIgnoringMonsters(const Player &player, Point startPosition, Point destinationPosition, bool allowDestinationNonWalkable = false);
-std::optional<std::vector<int8_t>> FindKeyboardWalkPathForSpeechLenient(const Player &player, Point startPosition, Point destinationPosition, bool allowDestinationNonWalkable = false);
-std::optional<std::vector<int8_t>> FindKeyboardWalkPathToClosestReachableForSpeech(const Player &player, Point startPosition, Point destinationPosition, Point &closestPosition);
-void AppendKeyboardWalkPathForSpeech(std::string &message, const std::vector<int8_t> &path);
+ std::optional<std::vector<int8_t>> FindKeyboardWalkPathForSpeech(const Player &player, Point startPosition, Point destinationPosition);
+ void AppendKeyboardWalkPathForSpeech(std::string &message, const std::vector<int8_t> &path);
  void AppendDirectionalFallback(std::string &message, const Displacement &delta);
 
 bool gbGameLoopStartup;
@@ -1901,80 +1896,6 @@ void UpdateBossHealthAnnouncements()
 	}
 }
 
-void UpdateAttackableMonsterAnnouncements()
-{
-	static std::optional<int> LastAttackableMonsterId;
-
-	if (MyPlayer == nullptr) {
-		LastAttackableMonsterId = std::nullopt;
-		return;
-	}
-	if (leveltype == DTYPE_TOWN) {
-		LastAttackableMonsterId = std::nullopt;
-		return;
-	}
-	if (MyPlayerIsDead || MyPlayer->_pmode == PM_DEATH || MyPlayer->hasNoLife()) {
-		LastAttackableMonsterId = std::nullopt;
-		return;
-	}
-	if (InGameMenu() || invflag) {
-		LastAttackableMonsterId = std::nullopt;
-		return;
-	}
-
-	const Player &player = *MyPlayer;
-	const Point playerPosition = player.position.tile;
-
-	int bestRotations = 5;
-	std::optional<int> bestId;
-
-	for (size_t i = 0; i < ActiveMonsterCount; i++) {
-		const int monsterId = static_cast<int>(ActiveMonsters[i]);
-		const Monster &monster = Monsters[monsterId];
-
-		if (monster.isInvalid)
-			continue;
-		if ((monster.flags & MFLAG_HIDDEN) != 0)
-			continue;
-		if (monster.hitPoints <= 0)
-			continue;
-		if (monster.isPlayerMinion())
-			continue;
-		if (!monster.isPossibleToHit())
-			continue;
-
-		const Point monsterPosition = monster.position.tile;
-		if (playerPosition.WalkingDistance(monsterPosition) > 1)
-			continue;
-
-		const int d1 = static_cast<int>(player._pdir);
-		const int d2 = static_cast<int>(GetDirection(playerPosition, monsterPosition));
-
-		int rotations = std::abs(d1 - d2);
-		if (rotations > 4)
-			rotations = 4 - (rotations % 4);
-
-		if (!bestId || rotations < bestRotations || (rotations == bestRotations && monsterId < *bestId)) {
-			bestRotations = rotations;
-			bestId = monsterId;
-		}
-	}
-
-	if (!bestId) {
-		LastAttackableMonsterId = std::nullopt;
-		return;
-	}
-
-	if (LastAttackableMonsterId && *LastAttackableMonsterId == *bestId)
-		return;
-
-	LastAttackableMonsterId = *bestId;
-
-	const std::string_view name = Monsters[*bestId].name();
-	if (!name.empty())
-		SpeakText(name, /*force=*/true);
-}
-
 void GameLogic()
 {
 	if (!ProcessInput()) {
@@ -2003,7 +1924,6 @@ void GameLogic()
 		ProcessVisionList();
 		UpdateBossHealthAnnouncements();
 		UpdateProximityAudioCues();
-		UpdateAttackableMonsterAnnouncements();
 	} else {
 		gGameLogicStep = GameLogicStep::ProcessTowners;
 		ProcessTowners();
@@ -2619,8 +2539,8 @@ struct TrackerCandidate {
 
 [[nodiscard]] constexpr bool IsTrackedDoorObject(const Object &object)
 {
-	// Track both closed and open doors (to match proximity audio cues).
-	return object.isDoor() && object.canInteractWith();
+	// Only closed doors (solid), because open doors are mostly just floor.
+	return object.isDoor() && object.canInteractWith() && object._oSolidFlag;
 }
 
 [[nodiscard]] constexpr bool IsShrineLikeObject(const Object &object)
@@ -2775,27 +2695,41 @@ template <typename Predicate>
 	std::vector<TrackerCandidate> result;
 	result.reserve(ActiveMonsterCount);
 
-	for (size_t i = 0; i < ActiveMonsterCount; ++i) {
-		const int monsterId = static_cast<int>(ActiveMonsters[i]);
-		const Monster &monster = Monsters[monsterId];
+	const int minX = std::max(0, playerPosition.x - maxDistance);
+	const int minY = std::max(0, playerPosition.y - maxDistance);
+	const int maxX = std::min(MAXDUNX - 1, playerPosition.x + maxDistance);
+	const int maxY = std::min(MAXDUNY - 1, playerPosition.y + maxDistance);
 
-		if (monster.isInvalid)
-			continue;
-		if ((monster.flags & MFLAG_HIDDEN) != 0)
-			continue;
-		if (monster.hitPoints <= 0)
-			continue;
+	std::array<bool, MaxMonsters> seen {};
 
-		const Point monsterDistancePosition { monster.position.future };
-		const int distance = playerPosition.ApproxDistance(monsterDistancePosition);
-		if (distance > maxDistance)
-			continue;
+	for (int y = minY; y <= maxY; ++y) {
+		for (int x = minX; x <= maxX; ++x) {
+			const int monsterId = std::abs(dMonster[x][y]) - 1;
+			if (monsterId < 0 || monsterId >= static_cast<int>(MaxMonsters))
+				continue;
+			if (seen[monsterId])
+				continue;
+			seen[monsterId] = true;
 
-		result.push_back(TrackerCandidate {
-		    .id = monsterId,
-		    .distance = distance,
-		    .name = monster.name(),
-		});
+			const Monster &monster = Monsters[monsterId];
+			if (monster.isInvalid)
+				continue;
+			if ((monster.flags & MFLAG_HIDDEN) != 0)
+				continue;
+			if (monster.hitPoints <= 0)
+				continue;
+
+			const Point monsterPosition { monster.position.tile };
+			const int distance = playerPosition.WalkingDistance(monsterPosition);
+			if (distance > maxDistance)
+				continue;
+
+			result.push_back(TrackerCandidate {
+			    .id = monsterId,
+			    .distance = distance,
+			    .name = monster.name(),
+			});
+		}
 	}
 
 	std::sort(result.begin(), result.end(), [](const TrackerCandidate &a, const TrackerCandidate &b) { return IsBetterTrackerCandidate(a, b); });
@@ -2872,7 +2806,7 @@ std::optional<int> FindNearestUnopenedChestObjectId(Point playerPosition)
 	return FindNearestObjectId(playerPosition, IsTrackedChestObject);
 }
 
-std::optional<int> FindNearestDoorObjectId(Point playerPosition)
+std::optional<int> FindNearestClosedDoorObjectId(Point playerPosition)
 {
 	return FindNearestObjectId(playerPosition, IsTrackedDoorObject);
 }
@@ -2897,22 +2831,31 @@ std::optional<int> FindNearestMonsterId(Point playerPosition)
 	std::optional<int> bestId;
 	int bestDistance = 0;
 
-	for (size_t i = 0; i < ActiveMonsterCount; ++i) {
-		const int monsterId = static_cast<int>(ActiveMonsters[i]);
-		const Monster &monster = Monsters[monsterId];
+	std::array<bool, MaxMonsters> seen {};
 
-		if (monster.isInvalid)
-			continue;
-		if ((monster.flags & MFLAG_HIDDEN) != 0)
-			continue;
-		if (monster.hitPoints <= 0)
-			continue;
+	for (int y = 0; y < MAXDUNY; ++y) {
+		for (int x = 0; x < MAXDUNX; ++x) {
+			const int monsterId = std::abs(dMonster[x][y]) - 1;
+			if (monsterId < 0 || monsterId >= static_cast<int>(MaxMonsters))
+				continue;
+			if (seen[monsterId])
+				continue;
+			seen[monsterId] = true;
 
-		const Point monsterDistancePosition { monster.position.future };
-		const int distance = playerPosition.ApproxDistance(monsterDistancePosition);
-		if (!bestId || distance < bestDistance) {
-			bestId = monsterId;
-			bestDistance = distance;
+			const Monster &monster = Monsters[monsterId];
+			if (monster.isInvalid)
+				continue;
+			if ((monster.flags & MFLAG_HIDDEN) != 0)
+				continue;
+			if (monster.hitPoints <= 0)
+				continue;
+
+			const Point monsterPosition { monster.position.tile };
+			const int distance = playerPosition.WalkingDistance(monsterPosition);
+			if (!bestId || distance < bestDistance) {
+				bestId = monsterId;
+				bestDistance = distance;
+			}
 		}
 	}
 
@@ -2922,11 +2865,7 @@ std::optional<int> FindNearestMonsterId(Point playerPosition)
 std::optional<Point> FindBestAdjacentApproachTile(const Player &player, Point playerPosition, Point targetPosition)
 {
 	std::optional<Point> best;
-	size_t bestPathLength = 0;
 	int bestDistance = 0;
-
-	std::optional<Point> bestFallback;
-	int bestFallbackDistance = 0;
 
 	for (int dy = -1; dy <= 1; ++dy) {
 		for (int dx = -1; dx <= 1; ++dx) {
@@ -2938,29 +2877,23 @@ std::optional<Point> FindBestAdjacentApproachTile(const Player &player, Point pl
 				continue;
 
 			const int distance = playerPosition.WalkingDistance(tile);
-
-			if (!bestFallback || distance < bestFallbackDistance) {
-				bestFallback = tile;
-				bestFallbackDistance = distance;
-			}
-
-			const std::optional<std::vector<int8_t>> path = FindKeyboardWalkPathForSpeech(player, playerPosition, tile);
-			if (!path)
-				continue;
-
-			const size_t pathLength = path->size();
-			if (!best || pathLength < bestPathLength || (pathLength == bestPathLength && distance < bestDistance)) {
+			if (!best || distance < bestDistance) {
 				best = tile;
-				bestPathLength = pathLength;
 				bestDistance = distance;
 			}
 		}
 	}
 
-	if (best)
-		return best;
+	return best;
+}
 
-	return bestFallback;
+std::optional<Point> FindBestApproachTileForObject(const Player &player, Point playerPosition, const Object &object)
+{
+	// Some interactable objects are placed on a walkable tile (e.g. floor switches). Prefer stepping on the tile in that case.
+	if (!object._oSolidFlag && PosOkPlayer(player, object.position))
+		return object.position;
+
+	return FindBestAdjacentApproachTile(player, playerPosition, object.position);
 }
 
 bool PosOkPlayerIgnoreDoors(const Player &player, Point position)
@@ -2986,122 +2919,6 @@ bool PosOkPlayerIgnoreDoors(const Player &player, Point position)
 	return true;
 }
 
-[[nodiscard]] bool IsTileWalkableForTrackerPath(Point position, bool ignoreDoors, bool ignoreBreakables)
-{
-	Object *object = FindObjectAtPosition(position);
-	if (object != nullptr) {
-		if (ignoreDoors && object->isDoor()) {
-			return true;
-		}
-		if (ignoreBreakables && object->_oSolidFlag && object->IsBreakable()) {
-			return true;
-		}
-		if (object->_oSolidFlag) {
-			return false;
-		}
-	}
-
-	return IsTileNotSolid(position);
-}
-
-bool PosOkPlayerIgnoreMonsters(const Player &player, Point position)
-{
-	if (!InDungeonBounds(position))
-		return false;
-	if (!IsTileWalkableForTrackerPath(position, /*ignoreDoors=*/false, /*ignoreBreakables=*/false))
-		return false;
-
-	Player *otherPlayer = PlayerAtPosition(position);
-	if (otherPlayer != nullptr && otherPlayer != &player && !otherPlayer->hasNoLife())
-		return false;
-
-	return true;
-}
-
-bool PosOkPlayerIgnoreDoorsAndMonsters(const Player &player, Point position)
-{
-	if (!InDungeonBounds(position))
-		return false;
-	if (!IsTileWalkableForTrackerPath(position, /*ignoreDoors=*/true, /*ignoreBreakables=*/false))
-		return false;
-
-	Player *otherPlayer = PlayerAtPosition(position);
-	if (otherPlayer != nullptr && otherPlayer != &player && !otherPlayer->hasNoLife())
-		return false;
-
-	return true;
-}
-
-bool PosOkPlayerIgnoreDoorsMonstersAndBreakables(const Player &player, Point position)
-{
-	if (!InDungeonBounds(position))
-		return false;
-	if (!IsTileWalkableForTrackerPath(position, /*ignoreDoors=*/true, /*ignoreBreakables=*/true))
-		return false;
-
-	Player *otherPlayer = PlayerAtPosition(position);
-	if (otherPlayer != nullptr && otherPlayer != &player && !otherPlayer->hasNoLife())
-		return false;
-
-	return true;
-}
-
-std::optional<Point> FindBestApproachTileForObject(const Player &player, Point playerPosition, const Object &object)
-{
-	// Some interactable objects are placed on a walkable tile (e.g. floor switches). Prefer stepping on the tile in that case.
-	if (!object._oSolidFlag && PosOkPlayer(player, object.position))
-		return object.position;
-
-	std::optional<Point> best;
-	size_t bestPathLength = 0;
-	int bestDistance = 0;
-
-	std::optional<Point> bestFallback;
-	int bestFallbackDistance = 0;
-
-	const auto considerTile = [&](Point tile) {
-		if (!PosOkPlayerIgnoreDoors(player, tile))
-			return;
-
-		const int distance = playerPosition.WalkingDistance(tile);
-		if (!bestFallback || distance < bestFallbackDistance) {
-			bestFallback = tile;
-			bestFallbackDistance = distance;
-		}
-
-		const std::optional<std::vector<int8_t>> path = FindKeyboardWalkPathForSpeech(player, playerPosition, tile);
-		if (!path)
-			return;
-
-		const size_t pathLength = path->size();
-		if (!best || pathLength < bestPathLength || (pathLength == bestPathLength && distance < bestDistance)) {
-			best = tile;
-			bestPathLength = pathLength;
-			bestDistance = distance;
-		}
-	};
-
-	for (int dy = -1; dy <= 1; ++dy) {
-		for (int dx = -1; dx <= 1; ++dx) {
-			if (dx == 0 && dy == 0)
-				continue;
-			considerTile(object.position + Displacement { dx, dy });
-		}
-	}
-
-	if (FindObjectAtPosition(object.position + Direction::NorthEast) == &object) {
-		// Special case for large objects (e.g. sarcophagi): allow approaching from one tile further to the north.
-		for (int dx = -1; dx <= 1; ++dx) {
-			considerTile(object.position + Displacement { dx, -2 });
-		}
-	}
-
-	if (best)
-		return best;
-
-	return bestFallback;
-}
-
 struct DoorBlockInfo {
 	Point beforeDoor;
 	Point doorPosition;
@@ -3118,67 +2935,6 @@ std::optional<DoorBlockInfo> FindFirstClosedDoorOnWalkPath(Point startPosition, 
 		}
 		position = next;
 	}
-	return std::nullopt;
-}
-
-enum class TrackerPathBlockType : uint8_t {
-	Door,
-	Monster,
-	Breakable,
-};
-
-struct TrackerPathBlockInfo {
-	TrackerPathBlockType type;
-	size_t stepIndex;
-	Point beforeBlock;
-	Point blockPosition;
-};
-
-[[nodiscard]] std::optional<TrackerPathBlockInfo> FindFirstTrackerPathBlock(Point startPosition, const int8_t *path, size_t steps, bool considerDoors, bool considerMonsters, bool considerBreakables, Point targetPosition)
-{
-	Point position = startPosition;
-	for (size_t i = 0; i < steps; ++i) {
-		const Point next = NextPositionForWalkDirection(position, path[i]);
-		if (next == targetPosition) {
-			position = next;
-			continue;
-		}
-
-		Object *object = FindObjectAtPosition(next);
-		if (considerDoors && object != nullptr && object->isDoor() && object->_oSolidFlag) {
-			return TrackerPathBlockInfo {
-				.type = TrackerPathBlockType::Door,
-				.stepIndex = i,
-				.beforeBlock = position,
-				.blockPosition = next,
-			};
-		}
-		if (considerBreakables && object != nullptr && object->_oSolidFlag && object->IsBreakable()) {
-			return TrackerPathBlockInfo {
-				.type = TrackerPathBlockType::Breakable,
-				.stepIndex = i,
-				.beforeBlock = position,
-				.blockPosition = next,
-			};
-		}
-
-		if (considerMonsters && leveltype != DTYPE_TOWN && dMonster[next.x][next.y] != 0) {
-			const int monsterRef = dMonster[next.x][next.y];
-			const int monsterId = std::abs(monsterRef) - 1;
-			const bool blocks = monsterRef <= 0 || (monsterId >= 0 && monsterId < static_cast<int>(MaxMonsters) && !Monsters[monsterId].hasNoLife());
-			if (blocks) {
-				return TrackerPathBlockInfo {
-					.type = TrackerPathBlockType::Monster,
-					.stepIndex = i,
-					.beforeBlock = position,
-					.blockPosition = next,
-				};
-			}
-		}
-
-		position = next;
-	}
-
 	return std::nullopt;
 }
 
@@ -3215,7 +2971,6 @@ void NavigateToTrackerTargetKeyPressed()
 
 	std::optional<int> targetId;
 	std::optional<Point> targetPosition;
-	std::optional<Point> alternateTargetPosition;
 	StringOrView targetName;
 
 	switch (SelectedTrackerTargetCategory) {
@@ -3291,9 +3046,11 @@ void NavigateToTrackerTargetKeyPressed()
 		targetName = tracked.name();
 		DecorateTrackerTargetNameWithOrdinalIfNeeded(*targetId, targetName, nearbyCandidates);
 		if (!cycleTarget) {
-			targetPosition = tracked.position;
-			if (FindObjectAtPosition(tracked.position + Direction::NorthEast) == &tracked)
-				alternateTargetPosition = tracked.position + Direction::NorthEast;
+			targetPosition = FindBestApproachTileForObject(*MyPlayer, playerPosition, tracked);
+			if (!targetPosition) {
+				SpeakText(_("Can't find a nearby tile to walk to."), true);
+				return;
+			}
 		}
 		break;
 	}
@@ -3311,7 +3068,7 @@ void NavigateToTrackerTargetKeyPressed()
 		} else if (lockedTargetId >= 0 && lockedTargetId < MAXOBJECTS) {
 			targetId = lockedTargetId;
 		} else {
-			targetId = FindNearestDoorObjectId(playerPosition);
+			targetId = FindNearestClosedDoorObjectId(playerPosition);
 		}
 		if (!targetId) {
 			SpeakText(_("No doors found."), true);
@@ -3321,7 +3078,7 @@ void NavigateToTrackerTargetKeyPressed()
 		const Object &object = Objects[*targetId];
 		if (!IsTrackedDoorObject(object)) {
 			lockedTargetId = -1;
-			targetId = FindNearestDoorObjectId(playerPosition);
+			targetId = FindNearestClosedDoorObjectId(playerPosition);
 			if (!targetId) {
 				SpeakText(_("No doors found."), true);
 				return;
@@ -3334,9 +3091,11 @@ void NavigateToTrackerTargetKeyPressed()
 		targetName = tracked.name();
 		DecorateTrackerTargetNameWithOrdinalIfNeeded(*targetId, targetName, nearbyCandidates);
 		if (!cycleTarget) {
-			targetPosition = tracked.position;
-			if (FindObjectAtPosition(tracked.position + Direction::NorthEast) == &tracked)
-				alternateTargetPosition = tracked.position + Direction::NorthEast;
+			targetPosition = FindBestApproachTileForObject(*MyPlayer, playerPosition, tracked);
+			if (!targetPosition) {
+				SpeakText(_("Can't find a nearby tile to walk to."), true);
+				return;
+			}
 		}
 		break;
 	}
@@ -3377,9 +3136,11 @@ void NavigateToTrackerTargetKeyPressed()
 		targetName = tracked.name();
 		DecorateTrackerTargetNameWithOrdinalIfNeeded(*targetId, targetName, nearbyCandidates);
 		if (!cycleTarget) {
-			targetPosition = tracked.position;
-			if (FindObjectAtPosition(tracked.position + Direction::NorthEast) == &tracked)
-				alternateTargetPosition = tracked.position + Direction::NorthEast;
+			targetPosition = FindBestApproachTileForObject(*MyPlayer, playerPosition, tracked);
+			if (!targetPosition) {
+				SpeakText(_("Can't find a nearby tile to walk to."), true);
+				return;
+			}
 		}
 		break;
 	}
@@ -3420,9 +3181,11 @@ void NavigateToTrackerTargetKeyPressed()
 		targetName = tracked.name();
 		DecorateTrackerTargetNameWithOrdinalIfNeeded(*targetId, targetName, nearbyCandidates);
 		if (!cycleTarget) {
-			targetPosition = tracked.position;
-			if (FindObjectAtPosition(tracked.position + Direction::NorthEast) == &tracked)
-				alternateTargetPosition = tracked.position + Direction::NorthEast;
+			targetPosition = FindBestApproachTileForObject(*MyPlayer, playerPosition, tracked);
+			if (!targetPosition) {
+				SpeakText(_("Can't find a nearby tile to walk to."), true);
+				return;
+			}
 		}
 		break;
 	}
@@ -3463,9 +3226,11 @@ void NavigateToTrackerTargetKeyPressed()
 		targetName = tracked.name();
 		DecorateTrackerTargetNameWithOrdinalIfNeeded(*targetId, targetName, nearbyCandidates);
 		if (!cycleTarget) {
-			targetPosition = tracked.position;
-			if (FindObjectAtPosition(tracked.position + Direction::NorthEast) == &tracked)
-				alternateTargetPosition = tracked.position + Direction::NorthEast;
+			targetPosition = FindBestApproachTileForObject(*MyPlayer, playerPosition, tracked);
+			if (!targetPosition) {
+				SpeakText(_("Can't find a nearby tile to walk to."), true);
+				return;
+			}
 		}
 		break;
 	}
@@ -3507,7 +3272,12 @@ void NavigateToTrackerTargetKeyPressed()
 		targetName = tracked.name();
 		DecorateTrackerTargetNameWithOrdinalIfNeeded(*targetId, targetName, nearbyCandidates);
 		if (!cycleTarget) {
-			targetPosition = tracked.position.tile;
+			const Point monsterPosition { tracked.position.tile };
+			targetPosition = FindBestAdjacentApproachTile(*MyPlayer, playerPosition, monsterPosition);
+			if (!targetPosition) {
+				SpeakText(_("Can't find a nearby tile to walk to."), true);
+				return;
+			}
 		}
 		break;
 	}
@@ -3522,127 +3292,14 @@ void NavigateToTrackerTargetKeyPressed()
 		return;
 	}
 
-	Point chosenTargetPosition = *targetPosition;
-	enum class TrackerPathMode : uint8_t {
-		RespectDoorsAndMonsters,
-		IgnoreDoors,
-		IgnoreMonsters,
-		IgnoreDoorsAndMonsters,
-		Lenient,
-	};
-
-	auto findPathToTarget = [&](Point destination, TrackerPathMode mode) -> std::optional<std::vector<int8_t>> {
-		const bool allowDestinationNonWalkable = !PosOkPlayer(*MyPlayer, destination);
-		switch (mode) {
-		case TrackerPathMode::RespectDoorsAndMonsters:
-			return FindKeyboardWalkPathForSpeechRespectingDoors(*MyPlayer, playerPosition, destination, allowDestinationNonWalkable);
-		case TrackerPathMode::IgnoreDoors:
-			return FindKeyboardWalkPathForSpeech(*MyPlayer, playerPosition, destination, allowDestinationNonWalkable);
-		case TrackerPathMode::IgnoreMonsters:
-			return FindKeyboardWalkPathForSpeechRespectingDoorsIgnoringMonsters(*MyPlayer, playerPosition, destination, allowDestinationNonWalkable);
-		case TrackerPathMode::IgnoreDoorsAndMonsters:
-			return FindKeyboardWalkPathForSpeechIgnoringMonsters(*MyPlayer, playerPosition, destination, allowDestinationNonWalkable);
-		case TrackerPathMode::Lenient:
-			return FindKeyboardWalkPathForSpeechLenient(*MyPlayer, playerPosition, destination, allowDestinationNonWalkable);
-		default:
-			return std::nullopt;
-		}
-	};
-
-	std::optional<std::vector<int8_t>> spokenPath;
-	bool pathIgnoresDoors = false;
-	bool pathIgnoresMonsters = false;
-	bool pathIgnoresBreakables = false;
-
-	const auto considerDestination = [&](Point destination, TrackerPathMode mode) {
-		const std::optional<std::vector<int8_t>> candidate = findPathToTarget(destination, mode);
-		if (!candidate)
-			return;
-		if (!spokenPath || candidate->size() < spokenPath->size()) {
-			spokenPath = *candidate;
-			chosenTargetPosition = destination;
-
-			pathIgnoresDoors = mode == TrackerPathMode::IgnoreDoors || mode == TrackerPathMode::IgnoreDoorsAndMonsters || mode == TrackerPathMode::Lenient;
-			pathIgnoresMonsters = mode == TrackerPathMode::IgnoreMonsters || mode == TrackerPathMode::IgnoreDoorsAndMonsters || mode == TrackerPathMode::Lenient;
-			pathIgnoresBreakables = mode == TrackerPathMode::Lenient;
-		}
-	};
-
-	considerDestination(*targetPosition, TrackerPathMode::RespectDoorsAndMonsters);
-	if (alternateTargetPosition)
-		considerDestination(*alternateTargetPosition, TrackerPathMode::RespectDoorsAndMonsters);
-
-	if (!spokenPath) {
-		considerDestination(*targetPosition, TrackerPathMode::IgnoreDoors);
-		if (alternateTargetPosition)
-			considerDestination(*alternateTargetPosition, TrackerPathMode::IgnoreDoors);
-	}
-
-	if (!spokenPath) {
-		considerDestination(*targetPosition, TrackerPathMode::IgnoreMonsters);
-		if (alternateTargetPosition)
-			considerDestination(*alternateTargetPosition, TrackerPathMode::IgnoreMonsters);
-	}
-
-	if (!spokenPath) {
-		considerDestination(*targetPosition, TrackerPathMode::IgnoreDoorsAndMonsters);
-		if (alternateTargetPosition)
-			considerDestination(*alternateTargetPosition, TrackerPathMode::IgnoreDoorsAndMonsters);
-	}
-
-	if (!spokenPath) {
-		considerDestination(*targetPosition, TrackerPathMode::Lenient);
-		if (alternateTargetPosition)
-			considerDestination(*alternateTargetPosition, TrackerPathMode::Lenient);
-	}
-
-	bool showUnreachableWarning = false;
-	if (!spokenPath) {
-		showUnreachableWarning = true;
-		Point closestPosition;
-		spokenPath = FindKeyboardWalkPathToClosestReachableForSpeech(*MyPlayer, playerPosition, chosenTargetPosition, closestPosition);
-		pathIgnoresDoors = true;
-		pathIgnoresMonsters = false;
-		pathIgnoresBreakables = false;
-	}
-
-	if (spokenPath && !showUnreachableWarning && !PosOkPlayer(*MyPlayer, chosenTargetPosition)) {
-		if (!spokenPath->empty())
-			spokenPath->pop_back();
-	}
-
-	if (spokenPath && (pathIgnoresDoors || pathIgnoresMonsters || pathIgnoresBreakables)) {
-		const std::optional<TrackerPathBlockInfo> block = FindFirstTrackerPathBlock(playerPosition, spokenPath->data(), spokenPath->size(), pathIgnoresDoors, pathIgnoresMonsters, pathIgnoresBreakables, chosenTargetPosition);
-		if (block) {
-			if (playerPosition.WalkingDistance(block->blockPosition) <= TrackerInteractDistanceTiles) {
-				switch (block->type) {
-				case TrackerPathBlockType::Door:
-					SpeakText(_("A door is blocking the path. Open it and try again."), true);
-					return;
-				case TrackerPathBlockType::Monster:
-					SpeakText(_("A monster is blocking the path. Clear it and try again."), true);
-					return;
-				case TrackerPathBlockType::Breakable:
-					SpeakText(_("A breakable object is blocking the path. Destroy it and try again."), true);
-					return;
-				}
-			}
-
-			spokenPath = std::vector<int8_t>(spokenPath->begin(), spokenPath->begin() + block->stepIndex);
-		}
-	}
-
+	const std::optional<std::vector<int8_t>> path = FindKeyboardWalkPathForSpeech(*MyPlayer, playerPosition, *targetPosition);
 	std::string message;
 	if (!targetName.empty())
 		StrAppend(message, targetName, "\n");
-	if (showUnreachableWarning) {
-		message.append(_("Can't find a path to the target."));
-		if (spokenPath && !spokenPath->empty())
-			message.append("\n");
-	}
-	if (spokenPath) {
-		if (!showUnreachableWarning || !spokenPath->empty())
-			AppendKeyboardWalkPathForSpeech(message, *spokenPath);
+	if (!path) {
+		AppendDirectionalFallback(message, *targetPosition - playerPosition);
+	} else {
+		AppendKeyboardWalkPathForSpeech(message, *path);
 	}
 
 	SpeakText(message, true);
@@ -3855,12 +3512,28 @@ void ListTownNpcsKeyPressed()
 	SpeakText(output, true);
 }
 
-namespace {
+bool IsTileNavigableForSpeech(const Player &player, Point position)
+{
+	if (!InDungeonBounds(position))
+		return false;
 
-using PosOkForSpeechFn = bool (*)(const Player &, Point);
+	if (!IsTileWalkable(position, /*ignoreDoors=*/true))
+		return false;
 
-template <size_t NumDirections>
-std::optional<std::vector<int8_t>> FindKeyboardWalkPathForSpeechBfs(const Player &player, Point startPosition, Point destinationPosition, PosOkForSpeechFn posOk, const std::array<int8_t, NumDirections> &walkDirections, bool allowDiagonalSteps, bool allowDestinationNonWalkable)
+	Player *otherPlayer = PlayerAtPosition(position);
+	if (otherPlayer != nullptr && otherPlayer != &player && !otherPlayer->hasNoLife())
+		return false;
+
+	if (leveltype == DTYPE_TOWN) {
+		// In town, treat NPCs as blocking.
+		if (dMonster[position.x][position.y] != 0)
+			return false;
+	}
+
+	return true;
+}
+
+std::optional<std::vector<int8_t>> FindKeyboardWalkPathForSpeech(const Player &player, Point startPosition, Point destinationPosition)
 {
 	if (!InDungeonBounds(startPosition) || !InDungeonBounds(destinationPosition))
 		return std::nullopt;
@@ -3887,14 +3560,10 @@ std::optional<std::vector<int8_t>> FindKeyboardWalkPathForSpeechBfs(const Player
 		if (visited[idx])
 			return;
 
-		const bool ok = posOk(player, next);
-		if (ok) {
-			if (!CanStep(current, next))
-				return;
-		} else {
-			if (!allowDestinationNonWalkable || next != destinationPosition)
-				return;
-		}
+		if (!IsTileNavigableForSpeech(player, next))
+			return;
+		if (!CanStep(current, next))
+			return;
 
 		visited[idx] = true;
 		parentDir[idx] = dir;
@@ -3908,6 +3577,13 @@ std::optional<std::vector<int8_t>> FindKeyboardWalkPathForSpeechBfs(const Player
 		return visited[indexOf(destinationPosition)];
 	};
 
+	constexpr std::array<int8_t, 4> WalkDirections = {
+		WALK_NE,
+		WALK_SW,
+		WALK_SE,
+		WALK_NW,
+	};
+
 	while (!queue.empty() && !hasReachedDestination()) {
 		const Point current = queue.front();
 		queue.pop();
@@ -3916,7 +3592,7 @@ std::optional<std::vector<int8_t>> FindKeyboardWalkPathForSpeechBfs(const Player
 		const int deltaAbsX = delta.deltaX >= 0 ? delta.deltaX : -delta.deltaX;
 		const int deltaAbsY = delta.deltaY >= 0 ? delta.deltaY : -delta.deltaY;
 
-		std::array<int8_t, 8> prioritizedDirs;
+		std::array<int8_t, 4> prioritizedDirs;
 		size_t prioritizedCount = 0;
 
 		const auto addUniqueDir = [&](int8_t dir) {
@@ -3932,12 +3608,6 @@ std::optional<std::vector<int8_t>> FindKeyboardWalkPathForSpeechBfs(const Player
 		const int8_t xDir = delta.deltaX > 0 ? WALK_SE : (delta.deltaX < 0 ? WALK_NW : WALK_NONE);
 		const int8_t yDir = delta.deltaY > 0 ? WALK_SW : (delta.deltaY < 0 ? WALK_NE : WALK_NONE);
 
-		if (allowDiagonalSteps && delta.deltaX != 0 && delta.deltaY != 0) {
-			const int8_t diagDir =
-			    delta.deltaX > 0 ? (delta.deltaY > 0 ? WALK_S : WALK_E) : (delta.deltaY > 0 ? WALK_W : WALK_N);
-			addUniqueDir(diagDir);
-		}
-
 		if (deltaAbsX >= deltaAbsY) {
 			addUniqueDir(xDir);
 			addUniqueDir(yDir);
@@ -3945,7 +3615,7 @@ std::optional<std::vector<int8_t>> FindKeyboardWalkPathForSpeechBfs(const Player
 			addUniqueDir(yDir);
 			addUniqueDir(xDir);
 		}
-		for (const int8_t dir : walkDirections) {
+		for (const int8_t dir : WalkDirections) {
 			addUniqueDir(dir);
 		}
 
@@ -3970,241 +3640,6 @@ std::optional<std::vector<int8_t>> FindKeyboardWalkPathForSpeechBfs(const Player
 
 	std::reverse(path.begin(), path.end());
 	return path;
-}
-
-std::optional<std::vector<int8_t>> FindKeyboardWalkPathForSpeechWithPosOk(const Player &player, Point startPosition, Point destinationPosition, PosOkForSpeechFn posOk, bool allowDestinationNonWalkable)
-{
-	constexpr std::array<int8_t, 4> AxisDirections = {
-		WALK_NE,
-		WALK_SW,
-		WALK_SE,
-		WALK_NW,
-	};
-
-	constexpr std::array<int8_t, 8> AllDirections = {
-		WALK_NE,
-		WALK_SW,
-		WALK_SE,
-		WALK_NW,
-		WALK_N,
-		WALK_E,
-		WALK_S,
-		WALK_W,
-	};
-
-	if (const std::optional<std::vector<int8_t>> axisPath = FindKeyboardWalkPathForSpeechBfs(player, startPosition, destinationPosition, posOk, AxisDirections, /*allowDiagonalSteps=*/false, allowDestinationNonWalkable); axisPath) {
-		return axisPath;
-	}
-
-	return FindKeyboardWalkPathForSpeechBfs(player, startPosition, destinationPosition, posOk, AllDirections, /*allowDiagonalSteps=*/true, allowDestinationNonWalkable);
-}
-
-} // namespace
-
-std::optional<std::vector<int8_t>> FindKeyboardWalkPathForSpeech(const Player &player, Point startPosition, Point destinationPosition, bool allowDestinationNonWalkable)
-{
-	return FindKeyboardWalkPathForSpeechWithPosOk(player, startPosition, destinationPosition, PosOkPlayerIgnoreDoors, allowDestinationNonWalkable);
-}
-
-std::optional<std::vector<int8_t>> FindKeyboardWalkPathForSpeechRespectingDoors(const Player &player, Point startPosition, Point destinationPosition, bool allowDestinationNonWalkable)
-{
-	return FindKeyboardWalkPathForSpeechWithPosOk(player, startPosition, destinationPosition, PosOkPlayer, allowDestinationNonWalkable);
-}
-
-std::optional<std::vector<int8_t>> FindKeyboardWalkPathForSpeechIgnoringMonsters(const Player &player, Point startPosition, Point destinationPosition, bool allowDestinationNonWalkable)
-{
-	return FindKeyboardWalkPathForSpeechWithPosOk(player, startPosition, destinationPosition, PosOkPlayerIgnoreDoorsAndMonsters, allowDestinationNonWalkable);
-}
-
-std::optional<std::vector<int8_t>> FindKeyboardWalkPathForSpeechRespectingDoorsIgnoringMonsters(const Player &player, Point startPosition, Point destinationPosition, bool allowDestinationNonWalkable)
-{
-	return FindKeyboardWalkPathForSpeechWithPosOk(player, startPosition, destinationPosition, PosOkPlayerIgnoreMonsters, allowDestinationNonWalkable);
-}
-
-std::optional<std::vector<int8_t>> FindKeyboardWalkPathForSpeechLenient(const Player &player, Point startPosition, Point destinationPosition, bool allowDestinationNonWalkable)
-{
-	return FindKeyboardWalkPathForSpeechWithPosOk(player, startPosition, destinationPosition, PosOkPlayerIgnoreDoorsMonstersAndBreakables, allowDestinationNonWalkable);
-}
-
-namespace {
-
-template <size_t NumDirections>
-std::optional<std::vector<int8_t>> FindKeyboardWalkPathToClosestReachableForSpeechBfs(const Player &player, Point startPosition, Point destinationPosition, PosOkForSpeechFn posOk, const std::array<int8_t, NumDirections> &walkDirections, bool allowDiagonalSteps, Point &closestPosition)
-{
-	if (!InDungeonBounds(startPosition) || !InDungeonBounds(destinationPosition))
-		return std::nullopt;
-
-	if (startPosition == destinationPosition) {
-		closestPosition = destinationPosition;
-		return std::vector<int8_t> {};
-	}
-
-	std::array<bool, MAXDUNX * MAXDUNY> visited {};
-	std::array<int8_t, MAXDUNX * MAXDUNY> parentDir {};
-	std::array<uint16_t, MAXDUNX * MAXDUNY> depth {};
-	parentDir.fill(WALK_NONE);
-	depth.fill(0);
-
-	std::queue<Point> queue;
-
-	const auto indexOf = [](Point position) -> size_t {
-		return static_cast<size_t>(position.x) + static_cast<size_t>(position.y) * MAXDUNX;
-	};
-
-	const auto enqueue = [&](Point current, int8_t dir) {
-		const Point next = NextPositionForWalkDirection(current, dir);
-		if (!InDungeonBounds(next))
-			return;
-
-		const size_t nextIdx = indexOf(next);
-		if (visited[nextIdx])
-			return;
-
-		if (!posOk(player, next))
-			return;
-		if (!CanStep(current, next))
-			return;
-
-		const size_t currentIdx = indexOf(current);
-		visited[nextIdx] = true;
-		parentDir[nextIdx] = dir;
-		depth[nextIdx] = static_cast<uint16_t>(depth[currentIdx] + 1);
-		queue.push(next);
-	};
-
-	const size_t startIdx = indexOf(startPosition);
-	visited[startIdx] = true;
-	queue.push(startPosition);
-
-	Point best = startPosition;
-	int bestDistance = startPosition.WalkingDistance(destinationPosition);
-	uint16_t bestDepth = 0;
-
-	const auto considerBest = [&](Point position) {
-		const int distance = position.WalkingDistance(destinationPosition);
-		const uint16_t posDepth = depth[indexOf(position)];
-		if (distance < bestDistance || (distance == bestDistance && posDepth < bestDepth)) {
-			best = position;
-			bestDistance = distance;
-			bestDepth = posDepth;
-		}
-	};
-
-	while (!queue.empty()) {
-		const Point current = queue.front();
-		queue.pop();
-
-		considerBest(current);
-
-		const Displacement delta = destinationPosition - current;
-		const int deltaAbsX = delta.deltaX >= 0 ? delta.deltaX : -delta.deltaX;
-		const int deltaAbsY = delta.deltaY >= 0 ? delta.deltaY : -delta.deltaY;
-
-		std::array<int8_t, 8> prioritizedDirs;
-		size_t prioritizedCount = 0;
-
-		const auto addUniqueDir = [&](int8_t dir) {
-			if (dir == WALK_NONE)
-				return;
-			for (size_t i = 0; i < prioritizedCount; ++i) {
-				if (prioritizedDirs[i] == dir)
-					return;
-			}
-			prioritizedDirs[prioritizedCount++] = dir;
-		};
-
-		const int8_t xDir = delta.deltaX > 0 ? WALK_SE : (delta.deltaX < 0 ? WALK_NW : WALK_NONE);
-		const int8_t yDir = delta.deltaY > 0 ? WALK_SW : (delta.deltaY < 0 ? WALK_NE : WALK_NONE);
-
-		if (allowDiagonalSteps && delta.deltaX != 0 && delta.deltaY != 0) {
-			const int8_t diagDir =
-			    delta.deltaX > 0 ? (delta.deltaY > 0 ? WALK_S : WALK_E) : (delta.deltaY > 0 ? WALK_W : WALK_N);
-			addUniqueDir(diagDir);
-		}
-
-		if (deltaAbsX >= deltaAbsY) {
-			addUniqueDir(xDir);
-			addUniqueDir(yDir);
-		} else {
-			addUniqueDir(yDir);
-			addUniqueDir(xDir);
-		}
-		for (const int8_t dir : walkDirections) {
-			addUniqueDir(dir);
-		}
-
-		for (size_t i = 0; i < prioritizedCount; ++i) {
-			enqueue(current, prioritizedDirs[i]);
-		}
-	}
-
-	closestPosition = best;
-	if (best == startPosition)
-		return std::vector<int8_t> {};
-
-	std::vector<int8_t> path;
-	Point position = best;
-	while (position != startPosition) {
-		const int8_t dir = parentDir[indexOf(position)];
-		if (dir == WALK_NONE)
-			return std::nullopt;
-
-		path.push_back(dir);
-		position = NextPositionForWalkDirection(position, OppositeWalkDirection(dir));
-	}
-
-	std::reverse(path.begin(), path.end());
-	return path;
-}
-
-} // namespace
-
-std::optional<std::vector<int8_t>> FindKeyboardWalkPathToClosestReachableForSpeech(const Player &player, Point startPosition, Point destinationPosition, Point &closestPosition)
-{
-	constexpr std::array<int8_t, 4> AxisDirections = {
-		WALK_NE,
-		WALK_SW,
-		WALK_SE,
-		WALK_NW,
-	};
-
-	constexpr std::array<int8_t, 8> AllDirections = {
-		WALK_NE,
-		WALK_SW,
-		WALK_SE,
-		WALK_NW,
-		WALK_N,
-		WALK_E,
-		WALK_S,
-		WALK_W,
-	};
-
-	Point axisClosest;
-	const std::optional<std::vector<int8_t>> axisPath = FindKeyboardWalkPathToClosestReachableForSpeechBfs(player, startPosition, destinationPosition, PosOkPlayerIgnoreDoors, AxisDirections, /*allowDiagonalSteps=*/false, axisClosest);
-
-	Point diagClosest;
-	const std::optional<std::vector<int8_t>> diagPath = FindKeyboardWalkPathToClosestReachableForSpeechBfs(player, startPosition, destinationPosition, PosOkPlayerIgnoreDoors, AllDirections, /*allowDiagonalSteps=*/true, diagClosest);
-
-	if (!axisPath && !diagPath)
-		return std::nullopt;
-	if (!axisPath) {
-		closestPosition = diagClosest;
-		return diagPath;
-	}
-	if (!diagPath) {
-		closestPosition = axisClosest;
-		return axisPath;
-	}
-
-	const int axisDistance = axisClosest.WalkingDistance(destinationPosition);
-	const int diagDistance = diagClosest.WalkingDistance(destinationPosition);
-	if (diagDistance < axisDistance) {
-		closestPosition = diagClosest;
-		return diagPath;
-	}
-
-	closestPosition = axisClosest;
-	return axisPath;
 }
 
 void AppendKeyboardWalkPathForSpeech(std::string &message, const std::vector<int8_t> &path)
@@ -4234,14 +3669,6 @@ void AppendKeyboardWalkPathForSpeech(std::string &message, const std::vector<int
 			return _("east");
 		case WALK_NW:
 			return _("west");
-		case WALK_N:
-			return _("northwest");
-		case WALK_E:
-			return _("northeast");
-		case WALK_S:
-			return _("southeast");
-		case WALK_W:
-			return _("southwest");
 		default:
 			return {};
 		}
