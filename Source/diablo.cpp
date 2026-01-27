@@ -1751,6 +1751,230 @@ void UpdatePlayerLowHpWarningSound()
 }
 #endif // NOSOUND
 
+namespace {
+
+[[nodiscard]] bool IsBossMonsterForHpAnnouncement(const Monster &monster)
+{
+	return monster.isUnique() || monster.ai == MonsterAIID::Diablo;
+}
+
+} // namespace
+
+void UpdateLowDurabilityWarnings()
+{
+	static std::array<uint32_t, NUM_INVLOC> WarnedSeeds {};
+	static std::array<bool, NUM_INVLOC> HasWarned {};
+
+	if (MyPlayer == nullptr)
+		return;
+	if (MyPlayerIsDead || MyPlayer->_pmode == PM_DEATH || MyPlayer->hasNoLife())
+		return;
+
+	std::vector<std::string> newlyLow;
+	newlyLow.reserve(NUM_INVLOC);
+
+	for (int slot = 0; slot < NUM_INVLOC; ++slot) {
+		const Item &item = MyPlayer->InvBody[slot];
+		if (item.isEmpty() || item._iMaxDur <= 0 || item._iMaxDur == DUR_INDESTRUCTIBLE || item._iDurability == DUR_INDESTRUCTIBLE) {
+			HasWarned[slot] = false;
+			continue;
+		}
+
+		const int maxDur = item._iMaxDur;
+		const int durability = item._iDurability;
+		if (durability <= 0) {
+			HasWarned[slot] = false;
+			continue;
+		}
+
+		int threshold = std::max(2, maxDur / 10);
+		threshold = std::clamp(threshold, 1, maxDur);
+
+		const bool isLow = durability <= threshold;
+		if (!isLow) {
+			HasWarned[slot] = false;
+			continue;
+		}
+
+		if (HasWarned[slot] && WarnedSeeds[slot] == item._iSeed)
+			continue;
+
+		HasWarned[slot] = true;
+		WarnedSeeds[slot] = item._iSeed;
+
+		const StringOrView name = item.getName();
+		if (!name.empty())
+			newlyLow.emplace_back(name.str().data(), name.str().size());
+	}
+
+	if (newlyLow.empty())
+		return;
+
+	// Add ordinal numbers for duplicates (e.g. two rings with the same name).
+	for (size_t i = 0; i < newlyLow.size(); ++i) {
+		int total = 0;
+		for (size_t j = 0; j < newlyLow.size(); ++j) {
+			if (newlyLow[j] == newlyLow[i])
+				++total;
+		}
+		if (total <= 1)
+			continue;
+
+		int ordinal = 1;
+		for (size_t j = 0; j < i; ++j) {
+			if (newlyLow[j] == newlyLow[i])
+				++ordinal;
+		}
+		newlyLow[i] = fmt::format("{} {}", newlyLow[i], ordinal);
+	}
+
+	std::string joined;
+	for (size_t i = 0; i < newlyLow.size(); ++i) {
+		if (i != 0)
+			joined += ", ";
+		joined += newlyLow[i];
+	}
+
+	SpeakText(fmt::format(fmt::runtime(_("Low durability: {:s}")), joined), /*force=*/true);
+}
+
+void UpdateBossHealthAnnouncements()
+{
+	static dungeon_type LastLevelType = DTYPE_NONE;
+	static int LastCurrLevel = -1;
+	static bool LastSetLevel = false;
+	static _setlevels LastSetLevelNum = SL_NONE;
+	static std::array<int8_t, MaxMonsters> LastAnnouncedBucket {};
+
+	if (MyPlayer == nullptr)
+		return;
+	if (leveltype == DTYPE_TOWN)
+		return;
+
+	const bool levelChanged = LastLevelType != leveltype || LastCurrLevel != currlevel || LastSetLevel != setlevel || LastSetLevelNum != setlvlnum;
+	if (levelChanged) {
+		LastAnnouncedBucket.fill(-1);
+		LastLevelType = leveltype;
+		LastCurrLevel = currlevel;
+		LastSetLevel = setlevel;
+		LastSetLevelNum = setlvlnum;
+	}
+
+	for (size_t monsterId = 0; monsterId < MaxMonsters; ++monsterId) {
+		if (LastAnnouncedBucket[monsterId] < 0)
+			continue;
+
+		const Monster &monster = Monsters[monsterId];
+		if (monster.isInvalid || monster.hitPoints <= 0 || !IsBossMonsterForHpAnnouncement(monster))
+			LastAnnouncedBucket[monsterId] = -1;
+	}
+
+	for (size_t i = 0; i < ActiveMonsterCount; i++) {
+		const int monsterId = static_cast<int>(ActiveMonsters[i]);
+		const Monster &monster = Monsters[monsterId];
+
+		if (monster.isInvalid)
+			continue;
+		if ((monster.flags & MFLAG_HIDDEN) != 0)
+			continue;
+		if (!IsBossMonsterForHpAnnouncement(monster))
+			continue;
+		if (monster.hitPoints <= 0 || monster.maxHitPoints <= 0)
+			continue;
+
+		const int64_t hp = std::clamp<int64_t>(monster.hitPoints, 0, monster.maxHitPoints);
+		const int64_t maxHp = monster.maxHitPoints;
+		const int hpPercent = static_cast<int>(std::clamp<int64_t>(hp * 100 / maxHp, 0, 100));
+		const int bucket = ((hpPercent + 9) / 10) * 10;
+
+		int8_t &lastBucket = LastAnnouncedBucket[monsterId];
+		if (lastBucket < 0) {
+			lastBucket = static_cast<int8_t>(((hpPercent + 9) / 10) * 10);
+			continue;
+		}
+
+		if (bucket >= lastBucket)
+			continue;
+
+		lastBucket = static_cast<int8_t>(bucket);
+		SpeakText(fmt::format(fmt::runtime(_("{:s} health: {:d}%")), monster.name(), bucket), /*force=*/false);
+	}
+}
+
+void UpdateAttackableMonsterAnnouncements()
+{
+	static std::optional<int> LastAttackableMonsterId;
+
+	if (MyPlayer == nullptr) {
+		LastAttackableMonsterId = std::nullopt;
+		return;
+	}
+	if (leveltype == DTYPE_TOWN) {
+		LastAttackableMonsterId = std::nullopt;
+		return;
+	}
+	if (MyPlayerIsDead || MyPlayer->_pmode == PM_DEATH || MyPlayer->hasNoLife()) {
+		LastAttackableMonsterId = std::nullopt;
+		return;
+	}
+	if (InGameMenu() || invflag) {
+		LastAttackableMonsterId = std::nullopt;
+		return;
+	}
+
+	const Player &player = *MyPlayer;
+	const Point playerPosition = player.position.tile;
+
+	int bestRotations = 5;
+	std::optional<int> bestId;
+
+	for (size_t i = 0; i < ActiveMonsterCount; i++) {
+		const int monsterId = static_cast<int>(ActiveMonsters[i]);
+		const Monster &monster = Monsters[monsterId];
+
+		if (monster.isInvalid)
+			continue;
+		if ((monster.flags & MFLAG_HIDDEN) != 0)
+			continue;
+		if (monster.hitPoints <= 0)
+			continue;
+		if (monster.isPlayerMinion())
+			continue;
+		if (!monster.isPossibleToHit())
+			continue;
+
+		const Point monsterPosition = monster.position.tile;
+		if (playerPosition.WalkingDistance(monsterPosition) > 1)
+			continue;
+
+		const int d1 = static_cast<int>(player._pdir);
+		const int d2 = static_cast<int>(GetDirection(playerPosition, monsterPosition));
+
+		int rotations = std::abs(d1 - d2);
+		if (rotations > 4)
+			rotations = 4 - (rotations % 4);
+
+		if (!bestId || rotations < bestRotations || (rotations == bestRotations && monsterId < *bestId)) {
+			bestRotations = rotations;
+			bestId = monsterId;
+		}
+	}
+
+	if (!bestId) {
+		LastAttackableMonsterId = std::nullopt;
+		return;
+	}
+
+	if (LastAttackableMonsterId && *LastAttackableMonsterId == *bestId)
+		return;
+
+	LastAttackableMonsterId = *bestId;
+
+	const std::string_view name = Monsters[*bestId].name();
+	if (!name.empty())
+		SpeakText(name, /*force=*/true);
+}
+
 void GameLogic()
 {
 	if (!ProcessInput()) {
@@ -1761,6 +1985,7 @@ void GameLogic()
 		ProcessPlayers();
 		UpdateAutoWalkTownNpc();
 		UpdateAutoWalkTracker();
+		UpdateLowDurabilityWarnings();
 	}
 	if (leveltype != DTYPE_TOWN) {
 		gGameLogicStep = GameLogicStep::ProcessMonsters;
@@ -1776,7 +2001,9 @@ void GameLogic()
 		ProcessItems();
 		ProcessLightList();
 		ProcessVisionList();
+		UpdateBossHealthAnnouncements();
 		UpdateProximityAudioCues();
+		UpdateAttackableMonsterAnnouncements();
 	} else {
 		gGameLogicStep = GameLogicStep::ProcessTowners;
 		ProcessTowners();
@@ -2045,7 +2272,7 @@ void SpeakSelectedTownNpc()
 	const int distance = playerPosition.WalkingDistance(towner.position);
 
 	std::string msg;
-	StrAppend(msg, _("Selected: "), towner.name);
+	StrAppend(msg, towner.name);
 	StrAppend(msg, "\n", _("Distance: "), distance);
 	StrAppend(msg, "\n", _("Position: "), towner.position.x, ", ", towner.position.y);
 	SpeakText(msg, true);
@@ -4315,6 +4542,93 @@ std::optional<Point> FindNearestTownPortalOnCurrentLevel()
 	return bestPosition;
 }
 
+struct TownPortalInTown {
+	int portalIndex;
+	Point position;
+	int distance;
+};
+
+std::optional<TownPortalInTown> FindNearestTownPortalInTown()
+{
+	if (MyPlayer == nullptr || leveltype != DTYPE_TOWN)
+		return std::nullopt;
+
+	const Point playerPosition = MyPlayer->position.future;
+
+	std::optional<TownPortalInTown> best;
+	int bestDistance = 0;
+
+	for (const Missile &missile : Missiles) {
+		if (missile._mitype != MissileID::TownPortal)
+			continue;
+		if (missile._misource < 0 || missile._misource >= MAXPORTAL)
+			continue;
+		if (!Portals[missile._misource].open)
+			continue;
+
+		const Point portalPosition = missile.position.tile;
+		const int distance = playerPosition.WalkingDistance(portalPosition);
+		if (!best || distance < bestDistance) {
+			best = TownPortalInTown {
+				.portalIndex = missile._misource,
+				.position = portalPosition,
+				.distance = distance,
+			};
+			bestDistance = distance;
+		}
+	}
+
+	return best;
+}
+
+[[nodiscard]] std::string TownPortalLabelForSpeech(const Portal &portal)
+{
+	if (portal.level <= 0)
+		return std::string { _("Town portal") };
+
+	if (portal.setlvl) {
+		const auto questLevel = static_cast<_setlevels>(portal.level);
+		const char *questLevelName = QuestLevelNames[questLevel];
+		if (questLevelName == nullptr || questLevelName[0] == '\0')
+			return std::string { _("Town portal to set level") };
+
+		return fmt::format(fmt::runtime(_(/* TRANSLATORS: {:s} is a set/quest level name. */ "Town portal to {:s}")), _(questLevelName));
+	}
+
+	constexpr std::array<const char *, DTYPE_LAST + 1> DungeonStrs = {
+		N_("Town"),
+		N_("Cathedral"),
+		N_("Catacombs"),
+		N_("Caves"),
+		N_("Hell"),
+		N_("Nest"),
+		N_("Crypt"),
+	};
+	std::string dungeonStr;
+	if (portal.ltype >= DTYPE_TOWN && portal.ltype <= DTYPE_LAST) {
+		dungeonStr = _(DungeonStrs[static_cast<size_t>(portal.ltype)]);
+	} else {
+		dungeonStr = _(/* TRANSLATORS: type of dungeon (i.e. Cathedral, Caves)*/ "None");
+	}
+
+	int floor = portal.level;
+	if (portal.ltype == DTYPE_CATACOMBS)
+		floor -= 4;
+	else if (portal.ltype == DTYPE_CAVES)
+		floor -= 8;
+	else if (portal.ltype == DTYPE_HELL)
+		floor -= 12;
+	else if (portal.ltype == DTYPE_NEST)
+		floor -= 16;
+	else if (portal.ltype == DTYPE_CRYPT)
+		floor -= 20;
+
+	if (floor > 0)
+		return fmt::format(fmt::runtime(_(/* TRANSLATORS: {:s} is a dungeon name and {:d} is a floor number. */ "Town portal to {:s} {:d}")), dungeonStr, floor);
+
+	return fmt::format(fmt::runtime(_(/* TRANSLATORS: {:s} is a dungeon name. */ "Town portal to {:s}")), dungeonStr);
+}
+
 struct QuestSetLevelEntrance {
 	_setlevels questLevel;
 	Point entrancePosition;
@@ -4491,6 +4805,42 @@ void SpeakNearestExitKeyPressed()
 	SpeakText(message, true);
 }
 
+void SpeakNearestTownPortalInTownKeyPressed()
+{
+	if (!CanPlayerTakeAction())
+		return;
+	if (AutomapActive) {
+		SpeakText(_("Close the map first."), true);
+		return;
+	}
+	if (leveltype != DTYPE_TOWN) {
+		SpeakText(_("Not in town."), true);
+		return;
+	}
+	if (MyPlayer == nullptr)
+		return;
+
+	const std::optional<TownPortalInTown> portal = FindNearestTownPortalInTown();
+	if (!portal) {
+		SpeakText(_("No town portals found."), true);
+		return;
+	}
+
+	const Point startPosition = MyPlayer->position.future;
+	const Point targetPosition = portal->position;
+
+	const std::optional<std::vector<int8_t>> path = FindKeyboardWalkPathForSpeech(*MyPlayer, startPosition, targetPosition);
+
+	std::string message = TownPortalLabelForSpeech(Portals[portal->portalIndex]);
+	message.append(": ");
+	if (!path)
+		AppendDirectionalFallback(message, targetPosition - startPosition);
+	else
+		AppendKeyboardWalkPathForSpeech(message, *path);
+
+	SpeakText(message, true);
+}
+
 void SpeakNearestStairsKeyPressed(int triggerMessage)
 {
 	if (!CanPlayerTakeAction())
@@ -4656,6 +5006,66 @@ void SpeakExperienceToNextLevelKeyPressed()
 	SpeakText(
 	    fmt::format(fmt::runtime(_("{:s} to Level {:d}")), FormatInteger(remainingExperience), nextLevel),
 	    /*force=*/true);
+}
+
+namespace {
+std::string BuildCurrentLocationForSpeech()
+{
+	// Quest Level Name
+	if (setlevel) {
+		const char *const questLevelName = QuestLevelNames[setlvlnum];
+		if (questLevelName == nullptr || questLevelName[0] == '\0')
+			return std::string { _("Set level") };
+
+		return fmt::format("{:s}: {:s}", _("Set level"), _(questLevelName));
+	}
+
+	// Dungeon Name
+	constexpr std::array<const char *, DTYPE_LAST + 1> DungeonStrs = {
+		N_("Town"),
+		N_("Cathedral"),
+		N_("Catacombs"),
+		N_("Caves"),
+		N_("Hell"),
+		N_("Nest"),
+		N_("Crypt"),
+	};
+	std::string dungeonStr;
+	if (leveltype >= DTYPE_TOWN && leveltype <= DTYPE_LAST) {
+		dungeonStr = _(DungeonStrs[static_cast<size_t>(leveltype)]);
+	} else {
+		dungeonStr = _(/* TRANSLATORS: type of dungeon (i.e. Cathedral, Caves)*/ "None");
+	}
+
+	if (leveltype == DTYPE_TOWN || currlevel <= 0)
+		return dungeonStr;
+
+	// Dungeon Level
+	int level = currlevel;
+	if (leveltype == DTYPE_CATACOMBS)
+		level -= 4;
+	else if (leveltype == DTYPE_CAVES)
+		level -= 8;
+	else if (leveltype == DTYPE_HELL)
+		level -= 12;
+	else if (leveltype == DTYPE_NEST)
+		level -= 16;
+	else if (leveltype == DTYPE_CRYPT)
+		level -= 20;
+
+	if (level <= 0)
+		return dungeonStr;
+
+	return fmt::format(fmt::runtime(_(/* TRANSLATORS: dungeon type and floor number i.e. "Cathedral 3"*/ "{} {}")), dungeonStr, level);
+}
+} // namespace
+
+void SpeakCurrentLocationKeyPressed()
+{
+	if (!CanPlayerTakeAction())
+		return;
+
+	SpeakText(BuildCurrentLocationForSpeech(), /*force=*/true);
 }
 
 void InventoryKeyPressed()
@@ -5238,7 +5648,7 @@ void InitKeymapActions()
 	    "PauseGame",
 	    N_("Pause Game"),
 	    N_("Pauses the game."),
-	    'P',
+	    SDLK_UNKNOWN,
 	    diablo_pause_game);
 	options.Keymapper.AddAction(
 	    "PauseGameAlternate",
@@ -5295,10 +5705,18 @@ void InitKeymapActions()
 	    "ChatLog",
 	    N_("Chat Log"),
 	    N_("Displays chat log."),
-	    'L',
+	    SDLK_INSERT,
 	    [] {
 		    ToggleChatLog();
 	    });
+	options.Keymapper.AddAction(
+	    "SpeakCurrentLocation",
+	    N_("Location"),
+	    N_("Speaks the current dungeon and floor."),
+	    'L',
+	    SpeakCurrentLocationKeyPressed,
+	    nullptr,
+	    CanPlayerTakeAction);
 	options.Keymapper.AddAction(
 	    "SortInv",
 	    N_("Sort Inventory"),
@@ -5323,6 +5741,14 @@ void InitKeymapActions()
 		    DebugToggle = !DebugToggle;
 	    });
 #endif
+	options.Keymapper.AddAction(
+	    "SpeakNearestTownPortal",
+	    N_("Nearest town portal"),
+	    N_("Speaks directions to the nearest open town portal in town."),
+	    'P',
+	    SpeakNearestTownPortalInTownKeyPressed,
+	    nullptr,
+	    []() { return CanPlayerTakeAction() && leveltype == DTYPE_TOWN; });
 	options.Keymapper.CommitActions();
 }
 
@@ -6638,6 +7064,8 @@ tl::expected<void, std::string> LoadGameLevel(bool firstflag, lvl_entry lvldir)
 	CompleteProgress();
 
 	LoadGameLevelCalculateCursor();
+	if (leveltype != DTYPE_TOWN)
+		SpeakText(BuildCurrentLocationForSpeech(), /*force=*/true);
 	return {};
 }
 
