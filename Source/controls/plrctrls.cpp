@@ -30,6 +30,7 @@
 #include "controls/game_controls.h"
 #include "controls/touch/gamepad.h"
 #include "cursor.h"
+#include "diablo.h"
 #include "doom.h"
 #include "engine/point.hpp"
 #include "engine/points_in_rectangle_range.hpp"
@@ -2146,6 +2147,7 @@ void UpdateTargetsForKeyboardAction()
 
 void PerformPrimaryActionAutoTarget()
 {
+	CancelAutoWalk();
 	if (ControlMode == ControlTypes::KeyboardAndMouse && !IsPointAndClick()) {
 		UpdateTargetsForKeyboardAction();
 	}
