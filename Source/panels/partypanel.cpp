@@ -22,6 +22,7 @@
 #include "stores.h"
 #include "tables/playerdat.hpp"
 #include "utils/status_macros.hpp"
+#include "utils/str_cat.hpp"
 #include "utils/surface_to_clx.hpp"
 
 namespace devilution {
@@ -47,11 +48,42 @@ OptionalOwnedClxSpriteList PlayerTags;
 Point PartyPanelPos = { 8, 8 };
 Rectangle PortraitFrameRects[MAX_PLRS];
 int RightClickedPortraitIndex = -1;
+
+// Dynamic sizing based on player count to fit more players on screen
+constexpr int GetHealthBarHeight(size_t playerCount)
+{
+	return playerCount <= 4 ? 7 : 5;
+}
+
+constexpr int GetManaBarHeight(size_t playerCount)
+{
+	return playerCount <= 4 ? 7 : 5;
+}
+
+constexpr int GetFrameGap(size_t playerCount)
+{
+	return playerCount <= 4 ? 15 : 10;
+}
+
+constexpr int FrameBorderSize = 3;
+constexpr int FrameSpriteSize = 12;
+
+constexpr Size GetFrameSections(size_t playerCount)
+{
+	// Smaller portraits for more players: 4x4 for <=4 players, 3x3 for 5-8 players
+	return playerCount <= 4 ? Size { 4, 4 } : Size { 3, 3 };
+}
+
+constexpr Size GetPortraitFrameSize(size_t playerCount)
+{
+	const Size sections = GetFrameSections(playerCount);
+	return { sections.width * FrameSpriteSize, sections.height * FrameSpriteSize };
+}
+
+// Legacy constants for backward compatibility
 constexpr int HealthBarHeight = 7;
 constexpr int ManaBarHeight = 7;
 constexpr int FrameGap = 15;
-constexpr int FrameBorderSize = 3;
-constexpr int FrameSpriteSize = 12;
 constexpr Size FrameSections = { 4, 4 }; // x/y can't be less than 2
 constexpr Size PortraitFrameSize = { FrameSections.width * FrameSpriteSize, FrameSections.height *FrameSpriteSize };
 
@@ -169,13 +201,30 @@ void DrawPartyMemberInfoPanel(const Surface &out)
 		return;
 	}
 
+	// Count active friendly players for dynamic sizing
+	size_t activeFriendlyPlayers = 0;
+	for (const Player &player : Players) {
+		if (player.plractive && player.friendlyMode) {
+#ifndef _DEBUG
+			if (&player != MyPlayer)
+#endif
+				activeFriendlyPlayers++;
+		}
+	}
+
+	// Get dynamic sizes based on player count
+	const Size dynamicPortraitSize = GetPortraitFrameSize(activeFriendlyPlayers);
+	const int dynamicHealthBarHeight = GetHealthBarHeight(activeFriendlyPlayers);
+	const int dynamicManaBarHeight = GetManaBarHeight(activeFriendlyPlayers);
+	const int dynamicFrameGap = GetFrameGap(activeFriendlyPlayers);
+
 	Point pos = PartyPanelPos;
 	if (AutomapActive)
-		pos.y += (FrameGap * 4);
+		pos.y += (dynamicFrameGap * 4);
 	if (*GetOptions().Graphics.showFPS)
-		pos.y += FrameGap;
+		pos.y += dynamicFrameGap;
 
-	int currentLongestNameWidth = PortraitFrameSize.width;
+	int currentLongestNameWidth = dynamicPortraitSize.width;
 	bool portraitUnderCursor = false;
 
 	for (Player &player : Players) {
@@ -188,7 +237,7 @@ void DrawPartyMemberInfoPanel(const Surface &out)
 			continue;
 #endif
 		// Get the rect of the portrait to use later
-		const Rectangle currentPortraitRect = { pos, PortraitFrameSize };
+		const Rectangle currentPortraitRect = { pos, dynamicPortraitSize };
 
 		const Surface gameScreen = out.subregionY(0, gnViewportHeight);
 
@@ -197,13 +246,13 @@ void DrawPartyMemberInfoPanel(const Surface &out)
 
 		// Get the players remaining life
 		// If the player is using mana shield change the color
-		const int lifeTicks = ((player._pHitPoints * PortraitFrameSize.width) + (player._pMaxHP / 2)) / player._pMaxHP;
+		const int lifeTicks = ((player._pHitPoints * dynamicPortraitSize.width) + (player._pMaxHP / 2)) / player._pMaxHP;
 		const uint8_t hpBarColor = (player.pManaShield) ? PAL8_YELLOW + 5 : PAL8_RED + 4;
 		// Now draw the characters remaining life
-		DrawBar(gameScreen, { pos, { lifeTicks, HealthBarHeight } }, hpBarColor);
+		DrawBar(gameScreen, { pos, { lifeTicks, dynamicHealthBarHeight } }, hpBarColor);
 
 		// Add to the position before continuing to the next item
-		pos.y += HealthBarHeight;
+		pos.y += dynamicHealthBarHeight;
 
 		// Get the players current portrait sprite
 		const ClxSprite playerPortraitSprite = GetPlayerPortraitSprite(player);
@@ -215,13 +264,13 @@ void DrawPartyMemberInfoPanel(const Surface &out)
 			offset = offsets.isDeadOffset;
 
 		// Calculate the players portait position
-		const Point portraitPos = { ((-(playerPortraitSprite.width() / 2)) + (PortraitFrameSize.width / 2)) + offset.x, offset.y };
+		const Point portraitPos = { ((-(playerPortraitSprite.width() / 2)) + (dynamicPortraitSize.width / 2)) + offset.x, offset.y };
 		// Get a subregion of the surface so the portrait doesn't get drawn over the frame
 		const Surface frameSubregion = gameScreen.subregion(
 		    pos.x + FrameBorderSize,
 		    pos.y + FrameBorderSize,
-		    PortraitFrameSize.width - (FrameBorderSize * 2),
-		    PortraitFrameSize.height - (FrameBorderSize * 2));
+		    dynamicPortraitSize.width - (FrameBorderSize * 2),
+		    dynamicPortraitSize.height - (FrameBorderSize * 2));
 
 		PortraitFrameRects[player.getId()] = {
 			{ frameSubregion.region.x, frameSubregion.region.y },
@@ -240,7 +289,14 @@ void DrawPartyMemberInfoPanel(const Surface &out)
 			RenderClxSprite(
 			    frameSubregion,
 			    (*PlayerTags)[player.getId() + 1],
-			    { PortraitFrameSize.width - (tagWidth + (tagWidth / 2)), 0 });
+			    { dynamicPortraitSize.width - (tagWidth + (tagWidth / 2)), 0 });
+		} else {
+			// For players 5-8, draw player number as text since we don't have enough tag sprites
+			DrawString(
+			    frameSubregion,
+			    StrCat(player.getId() + 1),
+			    { dynamicPortraitSize.width - 15, 2 },
+			    { .flags = UiFlags::ColorWhite | UiFlags::FontSize12 | UiFlags::Outlined });
 		}
 
 		// Check to see if the player is dead and if so we draw a half transparent red rect over the portrait
@@ -248,22 +304,22 @@ void DrawPartyMemberInfoPanel(const Surface &out)
 			DrawHalfTransparentRectTo(
 			    frameSubregion,
 			    0, 0,
-			    PortraitFrameSize.width,
-			    PortraitFrameSize.height,
+			    dynamicPortraitSize.width,
+			    dynamicPortraitSize.height,
 			    PAL8_RED + 4);
 		}
 
 		// Add to the position before continuing to the next item
-		pos.y += PortraitFrameSize.height;
+		pos.y += dynamicPortraitSize.height;
 
 		// Get the players remaining mana
-		const int manaTicks = ((player._pMana * PortraitFrameSize.width) + (player._pMaxMana / 2)) / player._pMaxMana;
+		const int manaTicks = ((player._pMana * dynamicPortraitSize.width) + (player._pMaxMana / 2)) / player._pMaxMana;
 		const uint8_t manaBarColor = PAL8_BLUE + 3;
 		// Now draw the characters remaining mana
-		DrawBar(gameScreen, { pos, { manaTicks, ManaBarHeight } }, manaBarColor);
+		DrawBar(gameScreen, { pos, { manaTicks, dynamicManaBarHeight } }, manaBarColor);
 
 		// Add to the position before continuing to the next item
-		pos.y += ManaBarHeight;
+		pos.y += dynamicManaBarHeight;
 
 		// Draw the players name under the frame
 		DrawString(
@@ -273,7 +329,7 @@ void DrawPartyMemberInfoPanel(const Surface &out)
 		    { .flags = UiFlags::ColorGold | UiFlags::Outlined | UiFlags::FontSize12 });
 
 		// Add to the position before continuing onto the next player
-		pos.y += FrameGap + 5;
+		pos.y += dynamicFrameGap + 5;
 
 		// Check to see if the player is hovering over this portrait and if so draw a string under the cursor saying they can right click to inspect
 		if (currentPortraitRect.contains(MousePosition)) {

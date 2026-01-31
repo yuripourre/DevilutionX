@@ -5,7 +5,7 @@
 namespace devilution {
 
 #define MAXLIGHTS 32
-#define MAXVISION 4
+#define MAXVISION 8
 #define NO_LIGHT -1
 
 constexpr char LightsMax = 15;

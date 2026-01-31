@@ -171,6 +171,8 @@ void nthread_start(bool setTurnUpperBit)
 	gdwNormalMsgSize >>= 2;
 	if (caps.maxplayers > MAX_PLRS)
 		caps.maxplayers = MAX_PLRS;
+	// Divide bandwidth among all players - with more players, each gets proportionally less
+	// This may require higher bandwidth connections for 8 player games
 	gdwNormalMsgSize /= caps.maxplayers;
 	while (gdwNormalMsgSize < 0x80) {
 		gdwNormalMsgSize *= 2;

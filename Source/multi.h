@@ -21,7 +21,8 @@ using net::leaveinfo_t;
 struct Player;
 
 // must be unsigned to generate unsigned comparisons with pnum
-#define MAX_PLRS 4
+// Increased from 4 to 8 to support more players in multiplayer games
+#define MAX_PLRS 8
 
 struct GameData {
 	int32_t size;
