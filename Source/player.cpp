@@ -42,6 +42,7 @@
 #include "levels/trigs.h"
 #include "lighting.h"
 #include "loadsave.h"
+#include "lua/lua_global.hpp"
 #include "minitext.h"
 #include "missiles.h"
 #include "monster.h"

@@ -97,7 +97,6 @@ enum OutlineColors : uint8_t {
 	OutlineColorsTowner = (PAL16_BEIGE + 6),
 	OutlineColorsMonster = (PAL16_RED + 9),
 };
-	
 
 bool AutoMapShowItems;
 
@@ -483,7 +482,7 @@ void DrawPlayer(const Surface &out, const Player &player, Point tilePosition, Po
 	const Point spriteBufferPosition = targetBufferPosition + player.getRenderingOffset(sprite);
 
 	if (&player == PlayerUnderCursor)
-		ClxDrawOutlineSkipColorZero(out, GetPlayerOutlineColor(player.id), spriteBufferPosition, sprite);
+		ClxDrawOutlineSkipColorZero(out, GetPlayerOutlineColor(player.getId()), spriteBufferPosition, sprite);
 
 	if (IsLocalPlayer(player) && IsNoneOf(leveltype, DTYPE_NEST, DTYPE_CRYPT)) {
 		ClxDraw(out, spriteBufferPosition, sprite);
@@ -1973,7 +1972,7 @@ void DrawAndBlit()
 
 	const Rectangle &mainPanel = GetMainPanel();
 
-	if (gnScreenWidth > mainPanel.size.width || IsRedrawEverything() || *GetOptions().Gameplay.enableFloatingNumbers != FloatingNumbers::Off) {
+	if (gnScreenWidth > mainPanel.size.width || IsRedrawEverything()) {
 		drawHealth = true;
 		drawMana = true;
 		drawControlButtons = true;
