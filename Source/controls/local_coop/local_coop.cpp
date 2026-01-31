@@ -5342,6 +5342,8 @@ bool HandleLocalCoopButtonRelease(uint8_t playerId, ControllerButton button)
 
 #else // USE_SDL1
 
+#include "stores.h"
+
 namespace devilution {
 
 LocalCoopState g_LocalCoop;

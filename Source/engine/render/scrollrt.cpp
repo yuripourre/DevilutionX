@@ -73,8 +73,8 @@
 #include "utils/sdl_compat.h"
 #include "utils/str_cat.hpp"
 
-#ifndef USE_SDL1
 #include "controls/local_coop/local_coop.hpp"
+#ifndef USE_SDL1
 #include "controls/touch/renderers.h"
 #endif
 
