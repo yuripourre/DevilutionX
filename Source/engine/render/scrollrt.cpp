@@ -2001,19 +2001,20 @@ void DrawAndBlit()
 			    HasAnyOf(InspectPlayer->_pIFlags, ItemSpecialEffect::NoMana) ? 0 : MyPlayer->_pMaxMana >> 6);
 	}
 
+#ifndef USE_SDL1
+	// Draw local co-op player HUD BEFORE floating info box so info box appears on top
+	DrawLocalCoopPlayerHUD(out);
+	// Draw local co-op character selection UI
+	DrawLocalCoopCharacterSelect(out);
+#endif
+
 	// Draw floating info box (always draw when local co-op is active, otherwise check option)
+	// This must be drawn AFTER local coop HUD so it appears on top
 	if (hideMainPanelForLocalCoop || *GetOptions().Gameplay.floatingInfoBox)
 		DrawFloatingInfoBox(out);
 
 	if (*GetOptions().Gameplay.showMultiplayerPartyInfo && PartySidePanelOpen)
 		DrawPartyMemberInfoPanel(out);
-
-#ifndef USE_SDL1
-	// Draw local co-op character selection UI
-	DrawLocalCoopCharacterSelect(out);
-	// Draw local co-op player HUD (text-only stats in corners)
-	DrawLocalCoopPlayerHUD(out);
-#endif
 
 	DrawCursor(out);
 
