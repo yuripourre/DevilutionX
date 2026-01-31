@@ -58,11 +58,11 @@
 #include "panels/spell_list.hpp"
 #include "pfile.h"
 #include "player.h"
-#include "tables/playerdat.hpp"
 #include "qol/stash.h"
 #include "quests.h"
 #include "spells.h"
 #include "stores.h"
+#include "tables/playerdat.hpp"
 #include "towners.h"
 #include "track.h"
 #include "utils/display.h"
@@ -2204,7 +2204,7 @@ void UpdateLocalCoopMovement()
 		// Update movement for coop players (players 2-4)
 		if (i > 0) {
 			UpdateLocalCoopPlayerMovement(static_cast<uint8_t>(i));
-			}
+		}
 		// Update target selection for all players
 		UpdateLocalCoopTargetSelection(static_cast<uint8_t>(i));
 	}
@@ -2642,14 +2642,14 @@ void DrawCoopSmallBar(const Surface &out, Point position, int width, int height,
 			} else {
 				// Other bars: use colorized sprite
 				// Select the appropriate colorized sprite
-			const OptionalOwnedClxSpriteList *barSprite = nullptr;
-			if (isMana) {
-				barSprite = &LocalCoopAssets::GetBarSpriteBlue();
-			} else if (hasManaShield) {
-				barSprite = &LocalCoopAssets::GetBarSpriteYellow();
-			} else {
-				barSprite = &LocalCoopAssets::GetBarSpriteRed();
-			}
+				const OptionalOwnedClxSpriteList *barSprite = nullptr;
+				if (isMana) {
+					barSprite = &LocalCoopAssets::GetBarSpriteBlue();
+				} else if (hasManaShield) {
+					barSprite = &LocalCoopAssets::GetBarSpriteYellow();
+				} else {
+					barSprite = &LocalCoopAssets::GetBarSpriteRed();
+				}
 
 				// Render tiled sprite to fill the bar area
 				if (barSprite && *barSprite && (*barSprite)->numSprites() > 0) {
@@ -5380,7 +5380,10 @@ void HandleLocalCoopControllerConnect(SDL_JoystickID /*controllerId*/) { }
 Point CalculateLocalCoopViewPosition() { return {}; }
 void UpdateLocalCoopCamera() { }
 void SetViewPosition(Point position) { ViewPosition = position; }
-void SetViewPositionForPlayer(const Player &player, Point position) { if (&player == MyPlayer) ViewPosition = position; }
+void SetViewPositionForPlayer(const Player &player, Point position)
+{
+	if (&player == MyPlayer) ViewPosition = position;
+}
 Displacement GetLocalCoopCameraOffset() { return {}; }
 bool HasCameraOffset() { return false; }
 bool IsLocalCoopPositionOnScreen(Point /*tilePos*/) { return true; }

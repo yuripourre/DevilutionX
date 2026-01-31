@@ -887,7 +887,7 @@ std::vector<OptionEntryBase *> GameplayOptions::GetEntries()
 		&friendlyFire,
 		&multiplayerFullQuests,
 		&randomizeQuests,
-		&theoQuest,	
+		&theoQuest,
 		&cowQuest,
 		&runInTown,
 		&quickCast,
