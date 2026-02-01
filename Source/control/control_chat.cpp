@@ -1,6 +1,7 @@
 #include "control_chat.hpp"
 #include "control.hpp"
 #include "control_panel.hpp"
+#include "engine/displacement.hpp"
 
 #include "control/control_chat_commands.hpp"
 #include "engine/backbuffer_state.hpp"
@@ -36,8 +37,11 @@ Rectangle MuteButtonRect { { 172, 69 }, { 61, 16 } };
 // Scrolling for mute buttons when there are more than 3 other players
 int MuteButtonScrollOffset = 0;
 constexpr int MaxVisibleMuteButtons = 3;
-Rectangle ScrollUpButtonRect { { 158, 69 }, { 12, 16 } };
-Rectangle ScrollDownButtonRect { { 158, 88 }, { 12, 16 } };
+// Arrow size matches ui_art/scrlarrw.png (20x68 image, 4 frames = 20x17 per frame)
+constexpr int ScrollArrowWidth = 20;
+constexpr int ScrollArrowHeight = 17;
+Rectangle ScrollUpButtonRect { { 158, 54 }, { ScrollArrowWidth, ScrollArrowHeight } };
+Rectangle ScrollDownButtonRect { { 158, 54 + ScrollArrowHeight + 17 }, { ScrollArrowWidth, ScrollArrowHeight } };
 bool ScrollUpButtonDown = false;
 bool ScrollDownButtonDown = false;
 
@@ -140,20 +144,30 @@ void DrawChatBox(const Surface &out)
 	const int maxScrollOffset = std::max(0, totalOtherPlayers - MaxVisibleMuteButtons);
 	MuteButtonScrollOffset = std::clamp(MuteButtonScrollOffset, 0, maxScrollOffset);
 	
-	// Draw scroll up button if needed
+	// Draw scroll up button if needed (frame 0 = up pressed, frame 1 = up unpressed)
 	if (totalOtherPlayers > MaxVisibleMuteButtons && MuteButtonScrollOffset > 0) {
-		const Point scrollUpPos = mainPanelPosition + Displacement { ScrollUpButtonRect.position.x, ScrollUpButtonRect.position.y + 15 };
-		const UiFlags arrowColor = ScrollUpButtonDown ? UiFlags::ColorButtonpushed : UiFlags::ColorButtonface;
-		DrawString(out, "^", { scrollUpPos, { ScrollUpButtonRect.size.width, ScrollUpButtonRect.size.height } }, 
-		    { .flags = arrowColor | UiFlags::AlignCenter | UiFlags::VerticalCenter });
+		const Point scrollUpPos = mainPanelPosition + Displacement { ScrollUpButtonRect.position.x, ScrollUpButtonRect.position.y };
+		if (ChatScrollArrows && ChatScrollArrows->numSprites() >= 2) {
+			const unsigned upFrame = ScrollUpButtonDown ? 0 : 1;
+			ClxDraw(out, scrollUpPos, (*ChatScrollArrows)[upFrame]);
+		} else {
+			const UiFlags arrowColor = ScrollUpButtonDown ? UiFlags::ColorButtonpushed : UiFlags::ColorButtonface;
+			DrawString(out, "^", { scrollUpPos, { ScrollUpButtonRect.size.width, ScrollUpButtonRect.size.height } },
+			    { .flags = arrowColor | UiFlags::AlignCenter | UiFlags::VerticalCenter });
+		}
 	}
 	
-	// Draw scroll down button if needed
+	// Draw scroll down button if needed (frame 2 = down pressed, frame 3 = down unpressed)
 	if (totalOtherPlayers > MaxVisibleMuteButtons && MuteButtonScrollOffset < maxScrollOffset) {
-		const Point scrollDownPos = mainPanelPosition + Displacement { ScrollDownButtonRect.position.x, ScrollDownButtonRect.position.y + 15 };
-		const UiFlags arrowColor = ScrollDownButtonDown ? UiFlags::ColorButtonpushed : UiFlags::ColorButtonface;
-		DrawString(out, "v", { scrollDownPos, { ScrollDownButtonRect.size.width, ScrollDownButtonRect.size.height } }, 
-		    { .flags = arrowColor | UiFlags::AlignCenter | UiFlags::VerticalCenter });
+		const Point scrollDownPos = mainPanelPosition + Displacement { ScrollDownButtonRect.position.x, ScrollDownButtonRect.position.y };
+		if (ChatScrollArrows && ChatScrollArrows->numSprites() >= 4) {
+			const unsigned downFrame = ScrollDownButtonDown ? 2 : 3;
+			ClxDraw(out, scrollDownPos, (*ChatScrollArrows)[downFrame]);
+		} else {
+			const UiFlags arrowColor = ScrollDownButtonDown ? UiFlags::ColorButtonpushed : UiFlags::ColorButtonface;
+			DrawString(out, "v", { scrollDownPos, { ScrollDownButtonRect.size.width, ScrollDownButtonRect.size.height } },
+			    { .flags = arrowColor | UiFlags::AlignCenter | UiFlags::VerticalCenter });
+		}
 	}
 	
 	int activeOtherIndex = 0;
@@ -207,8 +221,8 @@ bool CheckMuteButton()
 	if (!ChatFlag)
 		return false;
 
-	// Check scroll up button
-	Rectangle scrollUpBtn = ScrollUpButtonRect;
+	// Check scroll up button (hit test uses same offset as chat content vs panel)
+	Rectangle scrollUpBtn = { ScrollUpButtonRect.position - Displacement { 0, PanelPaddingHeight }, ScrollUpButtonRect.size };
 	SetPanelObjectPosition(UiPanels::Main, scrollUpBtn);
 	if (scrollUpBtn.contains(MousePosition)) {
 		ScrollUpButtonDown = true;
@@ -216,8 +230,8 @@ bool CheckMuteButton()
 		return true;
 	}
 	
-	// Check scroll down button
-	Rectangle scrollDownBtn = ScrollDownButtonRect;
+	// Check scroll down button (hit test uses same offset as chat content vs panel)
+	Rectangle scrollDownBtn = { ScrollDownButtonRect.position - Displacement { 0, PanelPaddingHeight }, ScrollDownButtonRect.size };
 	SetPanelObjectPosition(UiPanels::Main, scrollDownBtn);
 	if (scrollDownBtn.contains(MousePosition)) {
 		ScrollDownButtonDown = true;
@@ -250,9 +264,9 @@ void CheckMuteButtonUp()
 	if (!ChatFlag)
 		return;
 
-	// Handle scroll up button
+	// Handle scroll up button (hit test uses same offset as chat content vs panel)
 	if (ScrollUpButtonDown) {
-		Rectangle scrollUpBtn = ScrollUpButtonRect;
+		Rectangle scrollUpBtn = { ScrollUpButtonRect.position - Displacement { 0, PanelPaddingHeight }, ScrollUpButtonRect.size };
 		SetPanelObjectPosition(UiPanels::Main, scrollUpBtn);
 		if (scrollUpBtn.contains(MousePosition)) {
 			MuteButtonScrollOffset = std::max(0, MuteButtonScrollOffset - 1);
@@ -261,9 +275,9 @@ void CheckMuteButtonUp()
 		return;
 	}
 	
-	// Handle scroll down button
+	// Handle scroll down button (hit test uses same offset as chat content vs panel)
 	if (ScrollDownButtonDown) {
-		Rectangle scrollDownBtn = ScrollDownButtonRect;
+		Rectangle scrollDownBtn = { ScrollDownButtonRect.position - Displacement { 0, PanelPaddingHeight }, ScrollDownButtonRect.size };
 		SetPanelObjectPosition(UiPanels::Main, scrollDownBtn);
 		if (scrollDownBtn.contains(MousePosition)) {
 			int totalOtherPlayers = 0;

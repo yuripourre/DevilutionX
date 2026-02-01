@@ -9,10 +9,13 @@
 #include "control/control.hpp"
 #include "engine/clx_sprite.hpp"
 #include "engine/load_clx.hpp"
+#include "engine/load_pcx.hpp"
 #include "engine/render/clx_render.hpp"
 #include "engine/render/text_render.hpp"
+#include "engine/surface.hpp"
 #include "utils/display.h"
 #include "utils/language.h"
+#include "utils/png.h"
 #include "utils/sdl_compat.h"
 #include "utils/sdl_geometry.h"
 #include "utils/status_macros.hpp"
@@ -22,6 +25,7 @@ namespace devilution {
 
 OptionalOwnedClxSpriteList PanelButtonDown;
 OptionalOwnedClxSpriteList TalkButton;
+OptionalOwnedClxSpriteList ChatScrollArrows;
 
 namespace {
 
@@ -135,6 +139,25 @@ tl::expected<void, std::string> LoadMainPanel()
 		TalkButton = SurfaceToClx(talkSurface, NumTalkButtonSprites);
 	}
 
+	// Load scroll arrows for chat mute list (4 frames: up active, up, down active, down)
+	// Prefer ui_art/scrlarrw (20x68 PNG or PCX), fallback to sb_arrow
+	if (IsChatAvailable()) {
+		ChatScrollArrows = LoadPcxSpriteList("ui_art\\scrlarrw", 4, std::nullopt, nullptr, false);
+		if (!ChatScrollArrows) {
+			SDL_Surface *pngSurface = LoadPNG("ui_art\\scrlarrw.png");
+			if (pngSurface != nullptr) {
+				const bool is8Bit = SDLC_SURFACE_BITSPERPIXEL(pngSurface) == 8;
+				if (is8Bit && pngSurface->w == 20 && pngSurface->h == 68) {
+					const Surface surface(pngSurface);
+					ChatScrollArrows = SurfaceToClx(surface, 4);
+				}
+				SDL_FreeSurface(pngSurface);
+			}
+		}
+		if (!ChatScrollArrows) {
+			ChatScrollArrows = LoadPcxSpriteList("ui_art\\sb_arrow", 4);
+		}
+	}
 	PanelButtonDownGrime = std::nullopt;
 	PanelButtonGrime = std::nullopt;
 	PanelButton = std::nullopt;
@@ -143,6 +166,7 @@ tl::expected<void, std::string> LoadMainPanel()
 
 void FreeMainPanel()
 {
+	ChatScrollArrows = std::nullopt;
 	TalkButton = std::nullopt;
 	PanelButtonDown = std::nullopt;
 }
