@@ -33,6 +33,14 @@ int MuteButtons = 3;
 int MuteButtonPadding = 2;
 Rectangle MuteButtonRect { { 172, 69 }, { 61, 16 } };
 
+// Scrolling for mute buttons when there are more than 3 other players
+int MuteButtonScrollOffset = 0;
+constexpr int MaxVisibleMuteButtons = 3;
+Rectangle ScrollUpButtonRect { { 158, 69 }, { 12, 16 } };
+Rectangle ScrollDownButtonRect { { 158, 88 }, { 12, 16 } };
+bool ScrollUpButtonDown = false;
+bool ScrollDownButtonDown = false;
+
 void ResetChatMessage()
 {
 	if (CheckChatCommand(TalkMessage))
@@ -120,18 +128,57 @@ void DrawChatBox(const Surface &out)
 	ChatInputState->truncate(len);
 
 	x += 46;
-	int talkBtn = 0;
+	
+	// Count only active (joined) other players to avoid empty slots
+	int totalOtherPlayers = 0;
+	for (size_t i = 0; i < Players.size(); i++) {
+		if (i != MyPlayerId && Players[i].plractive)
+			totalOtherPlayers++;
+	}
+	
+	// Clamp scroll offset
+	const int maxScrollOffset = std::max(0, totalOtherPlayers - MaxVisibleMuteButtons);
+	MuteButtonScrollOffset = std::clamp(MuteButtonScrollOffset, 0, maxScrollOffset);
+	
+	// Draw scroll up button if needed
+	if (totalOtherPlayers > MaxVisibleMuteButtons && MuteButtonScrollOffset > 0) {
+		const Point scrollUpPos = mainPanelPosition + Displacement { ScrollUpButtonRect.position.x, ScrollUpButtonRect.position.y + 15 };
+		const UiFlags arrowColor = ScrollUpButtonDown ? UiFlags::ColorButtonpushed : UiFlags::ColorButtonface;
+		DrawString(out, "^", { scrollUpPos, { ScrollUpButtonRect.size.width, ScrollUpButtonRect.size.height } }, 
+		    { .flags = arrowColor | UiFlags::AlignCenter | UiFlags::VerticalCenter });
+	}
+	
+	// Draw scroll down button if needed
+	if (totalOtherPlayers > MaxVisibleMuteButtons && MuteButtonScrollOffset < maxScrollOffset) {
+		const Point scrollDownPos = mainPanelPosition + Displacement { ScrollDownButtonRect.position.x, ScrollDownButtonRect.position.y + 15 };
+		const UiFlags arrowColor = ScrollDownButtonDown ? UiFlags::ColorButtonpushed : UiFlags::ColorButtonface;
+		DrawString(out, "v", { scrollDownPos, { ScrollDownButtonRect.size.width, ScrollDownButtonRect.size.height } }, 
+		    { .flags = arrowColor | UiFlags::AlignCenter | UiFlags::VerticalCenter });
+	}
+	
+	int activeOtherIndex = 0;
+	int visibleBtnIndex = 0;
 	for (size_t i = 0; i < Players.size(); i++) {
 		Player &player = Players[i];
-		if (&player == MyPlayer)
+		if (&player == MyPlayer || !player.plractive)
 			continue;
+		
+		// Skip active players before scroll offset
+		if (activeOtherIndex < MuteButtonScrollOffset) {
+			activeOtherIndex++;
+			continue;
+		}
+		
+		// Only show MaxVisibleMuteButtons
+		if (visibleBtnIndex >= MaxVisibleMuteButtons)
+			break;
 
 		const UiFlags color = player.friendlyMode ? UiFlags::ColorWhitegold : UiFlags::ColorRed;
-		const Point talkPanPosition = mainPanelPosition + Displacement { 172, 84 + 18 * talkBtn };
+		const Point talkPanPosition = mainPanelPosition + Displacement { 172, 84 + 18 * visibleBtnIndex };
 		if (WhisperList[i]) {
 			// the normal (unpressed) voice button is pre-rendered on the panel, only need to draw over it when the button is held
-			if (TalkButtonsDown[talkBtn]) {
-				const unsigned spriteIndex = talkBtn == 0 ? 2 : 3; // the first button sprite includes a tip from the devils wing so is different to the rest.
+			if (TalkButtonsDown[visibleBtnIndex]) {
+				const unsigned spriteIndex = visibleBtnIndex == 0 ? 2 : 3; // the first button sprite includes a tip from the devils wing so is different to the rest.
 				ClxDraw(out, talkPanPosition, (*talkButtons)[spriteIndex]);
 
 				// Draw the translated string over the top of the default (english) button. This graphic is inset to avoid overlapping the wingtip, letting
@@ -139,20 +186,19 @@ void DrawChatBox(const Surface &out)
 				RenderClxSprite(out, (*TalkButton)[2], talkPanPosition + Displacement { 4, -15 });
 			}
 		} else {
-			unsigned spriteIndex = talkBtn == 0 ? 0 : 1; // the first button sprite includes a tip from the devils wing so is different to the rest.
-			if (TalkButtonsDown[talkBtn])
+			unsigned spriteIndex = visibleBtnIndex == 0 ? 0 : 1; // the first button sprite includes a tip from the devils wing so is different to the rest.
+			if (TalkButtonsDown[visibleBtnIndex])
 				spriteIndex += 4; // held button sprites are at index 4 and 5 (with and without wingtip respectively)
 			ClxDraw(out, talkPanPosition, (*talkButtons)[spriteIndex]);
 
 			// Draw the translated string over the top of the default (english) button. This graphic is inset to avoid overlapping the wingtip, letting
 			// the first button be treated the same as the other two further down the panel.
-			RenderClxSprite(out, (*TalkButton)[TalkButtonsDown[talkBtn] ? 1 : 0], talkPanPosition + Displacement { 4, -15 });
+			RenderClxSprite(out, (*TalkButton)[TalkButtonsDown[visibleBtnIndex] ? 1 : 0], talkPanPosition + Displacement { 4, -15 });
 		}
-		if (player.plractive) {
-			DrawString(out, player._pName, { { x, y + 60 + talkBtn * 18 }, { 204, 0 } }, { .flags = color });
-		}
+		DrawString(out, player._pName, { { x, y + 60 + visibleBtnIndex * 18 }, { 204, 0 } }, { .flags = color });
 
-		talkBtn++;
+		activeOtherIndex++;
+		visibleBtnIndex++;
 	}
 }
 
@@ -160,6 +206,24 @@ bool CheckMuteButton()
 {
 	if (!ChatFlag)
 		return false;
+
+	// Check scroll up button
+	Rectangle scrollUpBtn = ScrollUpButtonRect;
+	SetPanelObjectPosition(UiPanels::Main, scrollUpBtn);
+	if (scrollUpBtn.contains(MousePosition)) {
+		ScrollUpButtonDown = true;
+		ScrollDownButtonDown = false;
+		return true;
+	}
+	
+	// Check scroll down button
+	Rectangle scrollDownBtn = ScrollDownButtonRect;
+	SetPanelObjectPosition(UiPanels::Main, scrollDownBtn);
+	if (scrollDownBtn.contains(MousePosition)) {
+		ScrollDownButtonDown = true;
+		ScrollUpButtonDown = false;
+		return true;
+	}
 
 	Rectangle buttons = MuteButtonRect;
 
@@ -186,6 +250,34 @@ void CheckMuteButtonUp()
 	if (!ChatFlag)
 		return;
 
+	// Handle scroll up button
+	if (ScrollUpButtonDown) {
+		Rectangle scrollUpBtn = ScrollUpButtonRect;
+		SetPanelObjectPosition(UiPanels::Main, scrollUpBtn);
+		if (scrollUpBtn.contains(MousePosition)) {
+			MuteButtonScrollOffset = std::max(0, MuteButtonScrollOffset - 1);
+		}
+		ScrollUpButtonDown = false;
+		return;
+	}
+	
+	// Handle scroll down button
+	if (ScrollDownButtonDown) {
+		Rectangle scrollDownBtn = ScrollDownButtonRect;
+		SetPanelObjectPosition(UiPanels::Main, scrollDownBtn);
+		if (scrollDownBtn.contains(MousePosition)) {
+			int totalOtherPlayers = 0;
+			for (size_t i = 0; i < Players.size(); i++) {
+				if (i != MyPlayerId && Players[i].plractive)
+					totalOtherPlayers++;
+			}
+			const int maxScrollOffset = std::max(0, totalOtherPlayers - MaxVisibleMuteButtons);
+			MuteButtonScrollOffset = std::min(maxScrollOffset, MuteButtonScrollOffset + 1);
+		}
+		ScrollDownButtonDown = false;
+		return;
+	}
+
 	for (bool &talkButtonDown : TalkButtonsDown)
 		talkButtonDown = false;
 
@@ -200,13 +292,19 @@ void CheckMuteButtonUp()
 
 	int off = (MousePosition.y - buttons.position.y) / (MuteButtonRect.size.height + MuteButtonPadding);
 
+	// Map visible button index to actual player ID (only active players, no empty slots)
+	int activeOtherIndex = 0;
 	size_t playerId = 0;
-	for (; playerId < Players.size() && off != -1; ++playerId) {
-		if (playerId != MyPlayerId)
-			off--;
+	for (; playerId < Players.size(); ++playerId) {
+		if (playerId == MyPlayerId || !Players[playerId].plractive)
+			continue;
+		if (activeOtherIndex == MuteButtonScrollOffset + off)
+			break;
+		activeOtherIndex++;
 	}
-	if (playerId > 0 && playerId <= Players.size())
-		WhisperList[playerId - 1] = !WhisperList[playerId - 1];
+	
+	if (playerId < Players.size())
+		WhisperList[playerId] = !WhisperList[playerId];
 }
 
 void TypeChatMessage()
@@ -223,6 +321,9 @@ void TypeChatMessage()
 	for (bool &talkButtonDown : TalkButtonsDown) {
 		talkButtonDown = false;
 	}
+	MuteButtonScrollOffset = 0;
+	ScrollUpButtonDown = false;
+	ScrollDownButtonDown = false;
 	sgbPlrTalkTbl = GetMainPanel().size.height + PanelPaddingHeight;
 	RedrawEverything();
 	TalkSaveIndex = NextTalkSave;
