@@ -1055,15 +1055,15 @@ bool HandleMouseEventList(const SDL_Event &event, UiList *uiList)
 		if (dragScrollState.hasScrolled) {
 			dragScrollState.accumulatedDelta += deltaY;
 
-			// Use half the item height as scroll sensitivity
-			const int scrollSensitivity = uiList->m_height / 2;
+			// Use quarter of the item height for smoother scrolling
+			const int scrollSensitivity = uiList->m_height / 4;
 
 			while (dragScrollState.accumulatedDelta <= -scrollSensitivity) {
-				UiFocusUp();
+				UiFocusDown();
 				dragScrollState.accumulatedDelta += scrollSensitivity;
 			}
 			while (dragScrollState.accumulatedDelta >= scrollSensitivity) {
-				UiFocusDown();
+				UiFocusUp();
 				dragScrollState.accumulatedDelta -= scrollSensitivity;
 			}
 		}

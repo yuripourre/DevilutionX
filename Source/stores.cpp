@@ -2712,15 +2712,15 @@ void CheckStoreBtn()
 		if (storeDragScrollState.hasScrolled) {
 			storeDragScrollState.accumulatedDelta += deltaY;
 
-			// Use line height as scroll sensitivity
-			const int scrollSensitivity = LineHeight();
+			// Use quarter of line height for smoother scrolling
+			const int scrollSensitivity = LineHeight() / 4;
 
 			while (storeDragScrollState.accumulatedDelta <= -scrollSensitivity) {
-				StoreUp();
+				StoreDown();
 				storeDragScrollState.accumulatedDelta += scrollSensitivity;
 			}
 			while (storeDragScrollState.accumulatedDelta >= scrollSensitivity) {
-				StoreDown();
+				StoreUp();
 				storeDragScrollState.accumulatedDelta -= scrollSensitivity;
 			}
 		}
@@ -2787,7 +2787,8 @@ void CheckStoreBtn()
 					y--;
 				}
 			}
-			if (TextLine[y].isSelectable() || (HasScrollbar && y == BackButtonLine())) {
+			// Don't process click if we were drag scrolling
+			if (!IsStoreDragScrolling() && (TextLine[y].isSelectable() || (HasScrollbar && y == BackButtonLine()))) {
 				CurrentTextLine = y;
 				StoreEnter();
 			}
