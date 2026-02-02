@@ -1059,10 +1059,14 @@ bool HandleMouseEventList(const SDL_Event &event, UiList *uiList)
 			const int scrollSensitivity = uiList->m_height / 4;
 
 			while (dragScrollState.accumulatedDelta <= -scrollSensitivity) {
+				if (SelectedItem >= SelectedItemMax)
+					break; // Stop at bottom instead of wrapping
 				UiFocusDown();
 				dragScrollState.accumulatedDelta += scrollSensitivity;
 			}
 			while (dragScrollState.accumulatedDelta >= scrollSensitivity) {
+				if (SelectedItem <= 0)
+					break; // Stop at top instead of wrapping
 				UiFocusUp();
 				dragScrollState.accumulatedDelta -= scrollSensitivity;
 			}

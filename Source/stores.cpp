@@ -2716,12 +2716,22 @@ void CheckStoreBtn()
 			const int scrollSensitivity = LineHeight() / 4;
 
 			while (storeDragScrollState.accumulatedDelta <= -scrollSensitivity) {
+				int prevLine = CurrentTextLine;
+				int prevScroll = ScrollPos;
 				StoreDown();
 				storeDragScrollState.accumulatedDelta += scrollSensitivity;
+				// Stop at bottom instead of wrapping
+				if (CurrentTextLine == prevLine && ScrollPos == prevScroll)
+					break;
 			}
 			while (storeDragScrollState.accumulatedDelta >= scrollSensitivity) {
+				int prevLine = CurrentTextLine;
+				int prevScroll = ScrollPos;
 				StoreUp();
 				storeDragScrollState.accumulatedDelta -= scrollSensitivity;
+				// Stop at top instead of wrapping
+				if (CurrentTextLine == prevLine && ScrollPos == prevScroll)
+					break;
 			}
 		}
 		return;
