@@ -40,8 +40,8 @@ constexpr int MaxVisibleMuteButtons = 3;
 // Arrow size matches ui_art/scrlarrw.png (20x68 image, 4 frames = 20x17 per frame)
 constexpr int ScrollArrowWidth = 20;
 constexpr int ScrollArrowHeight = 17;
-Rectangle ScrollUpButtonRect { { 158, 54 }, { ScrollArrowWidth, ScrollArrowHeight } };
-Rectangle ScrollDownButtonRect { { 158, 54 + ScrollArrowHeight + 17 }, { ScrollArrowWidth, ScrollArrowHeight } };
+Rectangle ScrollUpButtonRect { { 150, 54 + ScrollArrowHeight * 2 + 16 }, { ScrollArrowWidth, ScrollArrowHeight } };
+Rectangle ScrollDownButtonRect { { 150, 54 + ScrollArrowHeight * 2 + 17 + 16 }, { ScrollArrowWidth, ScrollArrowHeight } };
 bool ScrollUpButtonDown = false;
 bool ScrollDownButtonDown = false;
 
