@@ -116,6 +116,9 @@ void StoreNext();
 void TakePlrsMoney(int cost);
 void StoreEnter();
 void CheckStoreBtn();
+void StartStoreDrag();
+void EndStoreDrag();
+bool IsStoreDragScrolling();
 void ReleaseStoreBtn();
 bool IsPlayerInStore();
 

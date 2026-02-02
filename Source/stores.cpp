@@ -36,6 +36,9 @@
 
 namespace devilution {
 
+/** @brief Minimum drag distance in pixels before activating scroll (prevents accidental scrolling on clicks) */
+constexpr int DragScrollThreshold = 5;
+
 TalkID ActiveStore;
 
 int CurrentItemIndex;
@@ -121,6 +124,39 @@ int PreviousScrollPos;
 int8_t CountdownScrollUp;
 /** Countdown for the push state of the scroll down button */
 int8_t CountdownScrollDown;
+
+struct StoreDragScrollState {
+	bool isDragging;
+	bool hasScrolled;
+	Point startPosition;
+	Point lastPosition;
+	int accumulatedDelta;
+
+	StoreDragScrollState()
+	    : isDragging(false)
+	    , hasScrolled(false)
+	    , startPosition(0, 0)
+	    , lastPosition(0, 0)
+	    , accumulatedDelta(0)
+	{
+	}
+
+	void StartDrag(Point position)
+	{
+		isDragging = true;
+		hasScrolled = false;
+		startPosition = position;
+		lastPosition = position;
+		accumulatedDelta = 0;
+	}
+
+	void EndDrag()
+	{
+		isDragging = false;
+		hasScrolled = false;
+		accumulatedDelta = 0;
+	}
+} storeDragScrollState;
 
 /** Remember current store while displaying a dialog */
 TalkID OldActiveStore;
@@ -2661,6 +2697,36 @@ void CheckStoreBtn()
 	const Rectangle windowRect { { uiPosition.x + 344, uiPosition.y + PaddingTop - 7 }, { 271, 303 } };
 	const Rectangle windowRectFull { { uiPosition.x + 24, uiPosition.y + PaddingTop - 7 }, { 591, 303 } };
 
+	// Handle drag scrolling if currently dragging
+	if (storeDragScrollState.isDragging) {
+		const int deltaY = MousePosition.y - storeDragScrollState.lastPosition.y;
+		storeDragScrollState.lastPosition = MousePosition;
+
+		// Check if total movement exceeds threshold
+		const int totalDelta = std::abs(MousePosition.y - storeDragScrollState.startPosition.y);
+		if (totalDelta >= DragScrollThreshold) {
+			storeDragScrollState.hasScrolled = true;
+		}
+
+		// If scrolling is activated, accumulate delta and scroll
+		if (storeDragScrollState.hasScrolled) {
+			storeDragScrollState.accumulatedDelta += deltaY;
+
+			// Use line height as scroll sensitivity
+			const int scrollSensitivity = LineHeight();
+
+			while (storeDragScrollState.accumulatedDelta <= -scrollSensitivity) {
+				StoreUp();
+				storeDragScrollState.accumulatedDelta += scrollSensitivity;
+			}
+			while (storeDragScrollState.accumulatedDelta >= scrollSensitivity) {
+				StoreDown();
+				storeDragScrollState.accumulatedDelta -= scrollSensitivity;
+			}
+		}
+		return;
+	}
+
 	if (!IsTextFullSize) {
 		if (!windowRect.contains(MousePosition)) {
 			while (IsPlayerInStore())
@@ -2729,10 +2795,31 @@ void CheckStoreBtn()
 	}
 }
 
+void StartStoreDrag()
+{
+	storeDragScrollState.StartDrag(MousePosition);
+}
+
+void EndStoreDrag()
+{
+	storeDragScrollState.EndDrag();
+}
+
+bool IsStoreDragScrolling()
+{
+	return storeDragScrollState.hasScrolled;
+}
+
 void ReleaseStoreBtn()
 {
-	CountdownScrollUp = -1;
-	CountdownScrollDown = -1;
+	const bool wasScrolling = IsStoreDragScrolling();
+	EndStoreDrag();
+
+	// Don't process clicks if we were scrolling
+	if (!wasScrolling) {
+		CountdownScrollUp = -1;
+		CountdownScrollDown = -1;
+	}
 }
 
 bool IsPlayerInStore()

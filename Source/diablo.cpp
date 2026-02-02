@@ -678,6 +678,9 @@ void HandleMouseButtonDown(Uint8 button, uint16_t modState)
 	case SDL_BUTTON_LEFT:
 		if (sgbMouseDown == CLICK_NONE) {
 			sgbMouseDown = CLICK_LEFT;
+			if (IsPlayerInStore()) {
+				StartStoreDrag();
+			}
 			LeftMouseDown(modState);
 		}
 		break;
@@ -778,6 +781,9 @@ void GameEventHandler(const SDL_Event &event, uint16_t modState)
 			InvalidateInventorySlot();
 		MousePosition = { SDLC_EventMotionIntX(event), SDLC_EventMotionIntY(event) };
 		gmenu_on_mouse_move();
+		if (IsPlayerInStore()) {
+			CheckStoreBtn();
+		}
 		return;
 	case SDL_EVENT_MOUSE_BUTTON_DOWN:
 		MousePosition = { SDLC_EventButtonIntX(event), SDLC_EventButtonIntY(event) };

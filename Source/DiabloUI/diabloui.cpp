@@ -91,6 +91,9 @@ std::size_t SelectedItem = 0;
 
 namespace {
 
+/** @brief Minimum drag distance in pixels before activating scroll (prevents accidental scrolling on clicks) */
+constexpr int DragScrollThreshold = 5;
+
 OptionalOwnedClxSpriteList ArtHero;
 std::vector<uint8_t> ArtHeroPortraitOrder;
 std::vector<OptionalOwnedClxSpriteList> ArtHeroOverrides;
@@ -125,6 +128,39 @@ struct ScrollBarState {
 		downArrowPressed = false;
 	}
 } scrollBarState;
+
+struct DragScrollState {
+	bool isDragging;
+	bool hasScrolled;
+	Point startPosition;
+	Point lastPosition;
+	int accumulatedDelta;
+
+	DragScrollState()
+	    : isDragging(false)
+	    , hasScrolled(false)
+	    , startPosition(0, 0)
+	    , lastPosition(0, 0)
+	    , accumulatedDelta(0)
+	{
+	}
+
+	void StartDrag(Point position)
+	{
+		isDragging = true;
+		hasScrolled = false;
+		startPosition = position;
+		lastPosition = position;
+		accumulatedDelta = 0;
+	}
+
+	void EndDrag()
+	{
+		isDragging = false;
+		hasScrolled = false;
+		accumulatedDelta = 0;
+	}
+} dragScrollState;
 
 void AdjustListOffset(std::size_t itemIndex)
 {
@@ -199,6 +235,7 @@ void UiInitList(void (*fnFocus)(size_t value), void (*fnSelect)(size_t value), v
 		gUiItems.push_back(item.get());
 	UiItemsWraps = itemsWraps;
 	listOffset = 0;
+	dragScrollState.EndDrag(); // Reset drag state when list is initialized
 	if (fnFocus != nullptr)
 		fnFocus(selectedItem);
 
@@ -484,7 +521,7 @@ void UiFocusNavigation(SDL_Event *event)
 		return;
 	}
 
-	if (IsAnyOf(event->type, SDL_EVENT_MOUSE_BUTTON_DOWN, SDL_EVENT_MOUSE_BUTTON_UP)
+	if (IsAnyOf(event->type, SDL_EVENT_MOUSE_BUTTON_DOWN, SDL_EVENT_MOUSE_BUTTON_UP, SDL_EVENT_MOUSE_MOTION)
 	    && UiItemMouseEvents(event, gUiItems)) {
 		return;
 	}
@@ -1001,48 +1038,93 @@ bool HandleMouseEventList(const SDL_Event &event, UiList *uiList)
 	if (event.button.button != SDL_BUTTON_LEFT)
 		return false;
 
-	if (!IsAnyOf(event.type, SDL_EVENT_MOUSE_BUTTON_UP, SDL_EVENT_MOUSE_BUTTON_DOWN)) {
+	if (!IsAnyOf(event.type, SDL_EVENT_MOUSE_BUTTON_UP, SDL_EVENT_MOUSE_BUTTON_DOWN, SDL_EVENT_MOUSE_MOTION)) {
 		return false;
+	}
+
+	// Handle mouse motion for drag scrolling
+	if (event.type == SDL_EVENT_MOUSE_MOTION && dragScrollState.isDragging) {
+		const Point currentPosition { event.motion.x, event.motion.y };
+		const int deltaY = currentPosition.y - dragScrollState.lastPosition.y;
+		dragScrollState.lastPosition = currentPosition;
+
+		// Check if total movement exceeds threshold
+		const int totalDelta = std::abs(currentPosition.y - dragScrollState.startPosition.y);
+		if (totalDelta >= DragScrollThreshold) {
+			dragScrollState.hasScrolled = true;
+		}
+
+		// If scrolling is activated, accumulate delta and scroll
+		if (dragScrollState.hasScrolled) {
+			dragScrollState.accumulatedDelta += deltaY;
+
+			// Use half the item height as scroll sensitivity
+			const int scrollSensitivity = uiList->m_height / 2;
+
+			while (dragScrollState.accumulatedDelta <= -scrollSensitivity) {
+				UiFocusUp();
+				dragScrollState.accumulatedDelta += scrollSensitivity;
+			}
+			while (dragScrollState.accumulatedDelta >= scrollSensitivity) {
+				UiFocusDown();
+				dragScrollState.accumulatedDelta -= scrollSensitivity;
+			}
+		}
+		return true;
 	}
 
 	std::size_t index = uiList->indexAt(event.button.y);
 	if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+		dragScrollState.StartDrag(Point { event.button.x, event.button.y });
 		uiList->Press(index);
 		return true;
 	}
 
-	if (event.type == SDL_EVENT_MOUSE_BUTTON_UP && !uiList->IsPressed(index)) {
-		return false;
-	}
+	if (event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
+		const bool wasScrolling = dragScrollState.hasScrolled;
+		dragScrollState.EndDrag();
 
-	index += listOffset;
-	const bool hasFocusCallback = gfnListFocus != nullptr;
-	const Uint32 ticksNow = SDL_GetTicks();
-	const bool recentlyClickedSameItem = hasFocusCallback && lastListClickIndex == index && ticksNow - lastListClickTicks <= ListDoubleClickTimeMs;
+		if (wasScrolling) {
+			// Suppress click event if we were scrolling
+			uiList->Release();
+			return true;
+		}
+
+		if (!uiList->IsPressed(index)) {
+			return false;
+		}
+
+		index += listOffset;
+		const bool hasFocusCallback = gfnListFocus != nullptr;
+		const Uint32 ticksNow = SDL_GetTicks();
+		const bool recentlyClickedSameItem = hasFocusCallback && lastListClickIndex == index && ticksNow - lastListClickTicks <= ListDoubleClickTimeMs;
 #ifndef USE_SDL1
-	const bool sdlReportedDoubleClick = event.button.clicks >= 2;
+		const bool sdlReportedDoubleClick = event.button.clicks >= 2;
 #else
-	const bool sdlReportedDoubleClick = false;
+		const bool sdlReportedDoubleClick = false;
 #endif
-	const bool doubleClicked = recentlyClickedSameItem || sdlReportedDoubleClick;
-	lastListClickIndex = index;
-	lastListClickTicks = ticksNow;
+		const bool doubleClicked = recentlyClickedSameItem || sdlReportedDoubleClick;
+		lastListClickIndex = index;
+		lastListClickTicks = ticksNow;
 
-	if (hasFocusCallback && SelectedItem != index) {
-		UiFocus(index, true, false);
+		if (hasFocusCallback && SelectedItem != index) {
+			UiFocus(index, true, false);
+			return true;
+		}
+
+		if (hasFocusCallback && !doubleClicked) {
+			return true;
+		}
+
+		if (HasAnyOf(uiList->GetItem(index)->uiFlags, UiFlags::ElementHidden | UiFlags::ElementDisabled))
+			return false;
+		SelectedItem = index;
+		UiFocusNavigationSelect();
+
 		return true;
 	}
 
-	if (hasFocusCallback && !doubleClicked) {
-		return true;
-	}
-
-	if (HasAnyOf(uiList->GetItem(index)->uiFlags, UiFlags::ElementHidden | UiFlags::ElementDisabled))
-		return false;
-	SelectedItem = index;
-	UiFocusNavigationSelect();
-
-	return true;
+	return false;
 }
 
 bool HandleMouseEventScrollBar(const SDL_Event &event, const UiScrollbar *uiSb)
@@ -1083,6 +1165,11 @@ bool HandleMouseEventScrollBar(const SDL_Event &event, const UiScrollbar *uiSb)
 
 bool HandleMouseEvent(const SDL_Event &event, UiItemBase *item)
 {
+	// Allow motion events for lists during drag scrolling
+	if (item->GetType() == UiType::List && event.type == SDL_EVENT_MOUSE_MOTION && dragScrollState.isDragging) {
+		return HandleMouseEventList(event, static_cast<UiList *>(item));
+	}
+
 	if (item->IsNotInteractive() || !IsInsideRect(event, item->m_rect))
 		return false;
 	switch (item->GetType()) {

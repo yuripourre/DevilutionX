@@ -105,8 +105,20 @@ bool HandleStoreInteraction(const SDL_Event &event)
 {
 	if (!IsPlayerInStore())
 		return false;
-	if (IsFingerDown(event))
+	if (IsFingerDown(event)) {
+		StartStoreDrag();
 		CheckStoreBtn();
+	}
+	if (IsFingerMotion(event)) {
+		CheckStoreBtn();
+	}
+	if (IsFingerUp(event)) {
+		bool wasScrolling = IsStoreDragScrolling();
+		EndStoreDrag();
+		if (!wasScrolling) {
+			CheckStoreBtn();
+		}
+	}
 	return true;
 }
 
