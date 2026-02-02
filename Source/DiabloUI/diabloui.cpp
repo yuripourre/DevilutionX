@@ -1035,9 +1035,6 @@ bool HandleMouseEventArtTextButton(const SDL_Event &event, const UiArtTextButton
 
 bool HandleMouseEventList(const SDL_Event &event, UiList *uiList)
 {
-	if (event.button.button != SDL_BUTTON_LEFT)
-		return false;
-
 	if (!IsAnyOf(event.type, SDL_EVENT_MOUSE_BUTTON_UP, SDL_EVENT_MOUSE_BUTTON_DOWN, SDL_EVENT_MOUSE_MOTION)) {
 		return false;
 	}
@@ -1072,6 +1069,10 @@ bool HandleMouseEventList(const SDL_Event &event, UiList *uiList)
 		}
 		return true;
 	}
+
+	// Only handle left mouse button for button events
+	if (event.button.button != SDL_BUTTON_LEFT)
+		return false;
 
 	std::size_t index = uiList->indexAt(event.button.y);
 	if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
