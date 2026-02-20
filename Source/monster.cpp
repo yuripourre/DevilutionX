@@ -1500,8 +1500,6 @@ void MonsterDeath(Monster &monster)
 			AddMissile(pos, pos, Direction::South, MissileID::BigExplosion, TARGET_PLAYERS, monster, 0, 0);
 			dMonster[pos.x][pos.y] = 0;
 			monster.isInvalid = true;
-			SpawnQuestItem(IDI_SOULSTONE, pos, 0, SelectionRegion::Bottom, true);
-			MyPlayer->Say(HeroSpeech::VengeanceIsMine);
 		}
 	} else if (monster.animInfo.isLastFrame()) {
 		if (monster.isUnique())
