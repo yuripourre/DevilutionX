@@ -1492,6 +1492,7 @@ void ShrinkLeaderPacksize(const Monster &monster)
 void MonsterDeath(Monster &monster)
 {
 	monster.var1++;
+	LuaEvent("OnMonsterDeath", &monster, monster.var1);
 	if (monster.type().type == MT_DIABLO) {
 		constexpr int SoulstoneSpawnFrame = 140;
 		if (monster.var1 == SoulstoneSpawnFrame) {

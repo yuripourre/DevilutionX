@@ -10,6 +10,7 @@
 #include "data/file.hpp"
 #include "effects.h"
 #include "engine/load_cel.hpp"
+#include "engine/point.hpp"
 #include "items.h"
 #include "lua/metadoc.hpp"
 #include "player.h"
@@ -564,6 +565,11 @@ void LuaRegisterDropGraphic(int iCurs, const std::string &path, int numFrames)
 	SetCustomDropAnim(iCurs, dropAnimId);
 }
 
+void LuaSpawnQuestItem(int itemIdx, int x, int y, bool sendmsg)
+{
+	SpawnQuestItem(static_cast<_item_indexes>(itemIdx), Point { x, y }, 0, SelectionRegion::Bottom, sendmsg);
+}
+
 } // namespace
 
 sol::table LuaItemModule(sol::state_view &lua)
@@ -588,6 +594,10 @@ sol::table LuaItemModule(sol::state_view &lua)
 	LuaSetDocFn(table, "registerCursorGraphic", "(path: string, width: number) -> number", "Load a sprite for inventory/cursor display and return its cursorGraphic ID.", LuaRegisterCursorGraphic);
 	LuaSetDocFn(table, "registerDropGraphic", "(cursorGraphic: number, path: string, numFrames: number)", "Load a floor drop animation sprite for a custom cursor graphic. If not called, uses the default for the item type.", LuaRegisterDropGraphic);
 	LuaSetDocFn(table, "registerItemSounds", "(cursorGraphic: number, invSound: number|nil, dropSound: number|nil)", "Register custom inventory and drop sounds for a cursor graphic. Use SfxID values from the audio module (e.g. SfxID.ItemRingFlip). For each slot, pass nil or SfxID.None (-1) to keep the default.", LuaRegisterItemSounds);
+	LuaSetDocFn(table, "spawnQuestItem",
+	    "(itemIdx: ItemIndex, x: integer, y: integer, sendmsg: boolean = true)",
+	    "Spawns a quest item at the given world coordinates. Pass sendmsg=true to sync with other clients.",
+	    LuaSpawnQuestItem);
 
 	// Expose enums through the module table
 	table["ItemIndex"] = lua["ItemIndex"];

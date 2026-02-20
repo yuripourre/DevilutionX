@@ -42,6 +42,16 @@ void InitMonsterUserType(sol::state_view &lua)
 	    [](const Monster &monster) {
 		    return static_cast<int>(reinterpret_cast<uintptr_t>(&monster));
 	    });
+	LuaSetDocReadonlyProperty(monsterType, "typeId", "integer",
+	    "Monster type ID matching monsters.MonsterID constants (readonly)",
+	    [](const Monster &monster) {
+		    return static_cast<int>(monster.type().type);
+	    });
+	LuaSetDocReadonlyProperty(monsterType, "name", "string",
+	    "Monster's display name (readonly)",
+	    [](const Monster &monster) -> std::string_view {
+		    return monster.name();
+	    });
 }
 
 } // namespace
@@ -52,6 +62,17 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 	sol::table table = lua.create_table();
 	LuaSetDocFn(table, "addMonsterDataFromTsv", "(path: string)", AddMonsterDataFromTsv);
 	LuaSetDocFn(table, "addUniqueMonsterDataFromTsv", "(path: string)", AddUniqueMonsterDataFromTsv);
+
+	// Named constants for the most commonly referenced built-in monster types.
+	// Values correspond to the _monster_id enum in tables/monstdat.h.
+	table["MonsterID"] = lua.create_table_with(
+	    "SkeletonKing", static_cast<int>(MT_SKING),
+	    "Butcher", static_cast<int>(MT_CLEAVER),
+	    "Golem", static_cast<int>(MT_GOLEM),
+	    "Diablo", static_cast<int>(MT_DIABLO),
+	    "DarkMage", static_cast<int>(MT_DARKMAGE),
+	    "NaKrul", static_cast<int>(MT_NAKRUL));
+
 	return table;
 }
 
