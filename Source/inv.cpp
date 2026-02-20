@@ -41,6 +41,7 @@
 #include "qol/stash.h"
 #include "qol/visual_store.h"
 #include "stores.h"
+#include "lua/lua_global.hpp"
 #include "towners.h"
 #include "utils/display.h"
 #include "utils/format.hpp"
@@ -2197,6 +2198,11 @@ bool UseInvItem(int cii)
 		player.Say(HeroSpeech::ThatWontWorkHere);
 		return true;
 	}
+
+	if (LuaEventCancellable("OnItemUse", &player, item)) {
+		return true;
+	}
+
 
 	if (item->_iMiscId == IMISC_BOOK)
 		PlaySFX(SfxID::ReadBook);
