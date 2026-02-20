@@ -80,6 +80,7 @@ enum _item_indexes : int16_t { // TODO defines all indexes in AllItemsList
 	IDI_SHORT_BATTLE_BOW = 148,
 	IDI_RUNEOFSTONE = 165,
 	IDI_SORCERER_DIABLO,
+	IDI_SOULSTONE,
 	IDI_ARENAPOT,
 
 	IDI_NUM_DEFAULT_ITEMS,
@@ -282,6 +283,7 @@ enum item_cursor_graphic : uint8_t {
 	ICURS_BLITZEN                     = 219,
 	ICURS_DEMON_PLATE_ARMOR           = 225,
 	ICURS_BOVINE                      = 226,
+	ICURS_SOULSTONE                   = 229,
 
 	ICURS_DEFAULT = static_cast<uint8_t>(-1),
 	// clang-format on
@@ -486,6 +488,7 @@ enum item_misc_id : int8_t {
 	IMISC_RUNELAST,
 	IMISC_AURIC,
 	IMISC_NOTE,
+	IMISC_SOULSTONE,
 	IMISC_ARENAPOT,
 	IMISC_INVALID = -1,
 };

@@ -880,29 +880,22 @@ void DiabloDeath(Monster &diablo, bool sendmsg)
 	quest._qactive = QUEST_DONE;
 	if (sendmsg)
 		NetSendCmdQuest(true, quest);
-	sgbSaveSoundOn = gbSoundOn;
-	gbProcessPlayers = false;
-	for (size_t i = 0; i < ActiveMonsterCount; i++) {
-		const int monsterId = ActiveMonsters[i];
-		Monster &monster = Monsters[monsterId];
-		if (monster.type().type == MT_DIABLO || diablo.activeForTicks == 0)
-			continue;
+	if (!gbIsMultiplayer) {
+		for (size_t i = 0; i < ActiveMonsterCount; i++) {
+			const int monsterId = ActiveMonsters[i];
+			Monster &monster = Monsters[monsterId];
+			if (monster.type().type == MT_DIABLO || diablo.activeForTicks == 0)
+				continue;
 
-		NewMonsterAnim(monster, MonsterGraphic::Death, monster.direction);
-		monster.mode = MonsterMode::Death;
-		monster.var1 = 0;
-		monster.position.tile = monster.position.old;
-		monster.position.future = monster.position.tile;
-		M_ClearSquares(monster);
-		monster.occupyTile(monster.position.tile, false);
+			NewMonsterAnim(monster, MonsterGraphic::Death, monster.direction);
+			monster.mode = MonsterMode::Death;
+			monster.var1 = 0;
+			monster.position.tile = monster.position.old;
+			monster.position.future = monster.position.tile;
+			M_ClearSquares(monster);
+			monster.occupyTile(monster.position.tile, false);
+		}
 	}
-	AddLight(diablo.position.tile, 8);
-	DoVision(diablo.position.tile, 8, MAP_EXP_NONE, true);
-	int dist = diablo.position.tile.WalkingDistance(ViewPosition);
-	dist = std::min(dist, 20);
-	diablo.var3 = ViewPosition.x << 16;
-	diablo.position.temp.x = ViewPosition.y << 16;
-	diablo.position.temp.y = (int)((diablo.var3 - (diablo.position.tile.x << 16)) / (float)dist);
 	if (!gbIsMultiplayer) {
 		Player &myPlayer = *MyPlayer;
 		myPlayer.pDiabloKillLevel = std::max(myPlayer.pDiabloKillLevel, static_cast<uint8_t>(sgGameInitInfo.nDifficulty + 1));
@@ -1500,20 +1493,15 @@ void MonsterDeath(Monster &monster)
 {
 	monster.var1++;
 	if (monster.type().type == MT_DIABLO) {
-		if (monster.position.tile.x < ViewPosition.x) {
-			ViewPosition.x--;
-		} else if (monster.position.tile.x > ViewPosition.x) {
-			ViewPosition.x++;
+		constexpr int SoulstoneSpawnFrame = 140;
+		if (monster.var1 == SoulstoneSpawnFrame) {
+			const Point pos = monster.position.tile;
+			AddMissile(pos, pos, Direction::South, MissileID::BigExplosion, TARGET_PLAYERS, monster, 0, 0);
+			dMonster[pos.x][pos.y] = 0;
+			monster.isInvalid = true;
+			SpawnQuestItem(IDI_SOULSTONE, pos, 0, SelectionRegion::Bottom, true);
+			MyPlayer->Say(HeroSpeech::VengeanceIsMine);
 		}
-
-		if (monster.position.tile.y < ViewPosition.y) {
-			ViewPosition.y--;
-		} else if (monster.position.tile.y > ViewPosition.y) {
-			ViewPosition.y++;
-		}
-
-		if (monster.var1 == 140)
-			PrepDoEnding();
 	} else if (monster.animInfo.isLastFrame()) {
 		if (monster.isUnique())
 			AddCorpse(monster.position.tile, monster.corpseId, monster.direction);
@@ -4120,7 +4108,6 @@ void DoEnding()
 
 void PrepDoEnding()
 {
-	gbSoundOn = sgbSaveSoundOn;
 	gbRunGame = false;
 	MyPlayerIsDead = false;
 	cineflag = true;

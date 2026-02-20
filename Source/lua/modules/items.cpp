@@ -345,6 +345,7 @@ void RegisterItemIndexEnum(sol::state_view &lua)
 	        { "ShortBattleBow", IDI_SHORT_BATTLE_BOW },
 	        { "RuneOfStone", IDI_RUNEOFSTONE },
 	        { "SorcererDiablo", IDI_SORCERER_DIABLO },
+	        { "Soulstone", IDI_SOULSTONE },
 	        { "ArenaPotion", IDI_ARENAPOT },
 	        { "None", IDI_NONE },
 	    });

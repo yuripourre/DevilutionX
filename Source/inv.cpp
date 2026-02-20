@@ -34,6 +34,7 @@
 #include "levels/tile_properties.hpp"
 #include "levels/town.h"
 #include "minitext.h"
+#include "monster.h"
 #include "options.h"
 #include "panels/ui_panels.hpp"
 #include "player.h"
@@ -2175,6 +2176,20 @@ bool UseInvItem(int cii)
 
 	if (item->_iMiscId == IMISC_ARENAPOT && !player.isOnArenaLevel()) {
 		player.Say(HeroSpeech::ThatWontWorkHere);
+		return true;
+	}
+
+	if (item->_iMiscId == IMISC_SOULSTONE) {
+		constexpr uint8_t DiabloLevel = 16;
+		if (player.isOnLevel(DiabloLevel)) {
+			if (Quests[Q_DIABLO]._qactive == QUEST_DONE) {
+				PrepDoEnding();
+			} else {
+				player.Say(HeroSpeech::ICantUseThisYet);
+			}
+		} else {
+			player.Say(HeroSpeech::ThatWontWorkHere);
+		}
 		return true;
 	}
 

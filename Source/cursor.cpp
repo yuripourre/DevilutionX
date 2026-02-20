@@ -36,6 +36,7 @@
 #include "hwcursor.hpp"
 #include "inv.h"
 #include "levels/trigs.h"
+#include "tables/itemdat.h"
 #include "missiles.h"
 #include "options.h"
 #include "qol/itemlabels.h"
@@ -63,6 +64,7 @@ namespace {
 /** Cursor images CEL */
 OptionalOwnedClxSpriteList pCursCels;
 OptionalOwnedClxSpriteList pCursCels2;
+OptionalOwnedClxSpriteList pCursCelsSoulstone;
 
 OptionalOwnedClxSpriteList *HalfSizeItemSprites;
 OptionalOwnedClxSpriteList *HalfSizeItemSpritesRed;
@@ -441,11 +443,16 @@ void InitCursor()
 #ifdef UNPACKED_MPQS
 	pCursCels = LoadClx("data\\inv\\objcurs.clx");
 	pCursCels2 = LoadOptionalClx("data\\inv\\objcurs2.clx");
+	pCursCelsSoulstone = LoadOptionalClx("data\\inv\\soulstone.clx");
 #else
 	pCursCels = LoadCel("data\\inv\\objcurs", ReadWidths(FindAsset("data\\inv\\objcurs-widths.txt")).data());
 	AssetRef ref = FindAsset("data\\inv\\objcurs2-widths.txt");
 	if (ref.ok()) {
 		pCursCels2 = LoadOptionalCel("data\\inv\\objcurs2", ReadWidths(std::move(ref)).data());
+	}
+	ref = FindAsset("data\\inv\\soulstone-widths.txt");
+	if (ref.ok()) {
+		pCursCelsSoulstone = LoadOptionalCel("data\\inv\\soulstone", ReadWidths(std::move(ref)).data());
 	}
 #endif
 	ClearCursor();
@@ -455,12 +462,17 @@ void FreeCursor()
 {
 	pCursCels = std::nullopt;
 	pCursCels2 = std::nullopt;
+	pCursCelsSoulstone = std::nullopt;
 	ClearCursor();
 }
 
 ClxSprite GetInvItemSprite(int cursId)
 {
 	assert(cursId > 0);
+	if (cursId == ICURS_SOULSTONE) {
+		assert(pCursCelsSoulstone.has_value());
+		return (*pCursCelsSoulstone)[0];
+	}
 	const size_t numSprites = pCursCels->numSprites();
 	if (static_cast<size_t>(cursId) <= numSprites) {
 		return (*pCursCels)[cursId - 1];
