@@ -239,6 +239,7 @@ char OilNames[10][25] = {
 
 /** Map of item type .cel file names. */
 const char *const ItemDropNames[] = {
+	// Diablo
 	"armor2",
 	"axe",
 	"fbttle",
@@ -274,6 +275,7 @@ const char *const ItemDropNames[] = {
 	"bldstn",
 	"fanvil",
 	"flazstaf",
+	// Hellfire
 	"bombs1",
 	"halfps1",
 	"wholeps1",
@@ -282,6 +284,13 @@ const char *const ItemDropNames[] = {
 	"cows1",
 	"donkys1",
 	"mooses1",
+	// Unused (Diablo)
+	"axeflip",
+	"bottle",
+	"feye",
+	"fheart",
+	"manaflip",
+	"wand",
 };
 /** Maps of item drop animation length. */
 int8_t ItemAnimLs[] = {
@@ -1734,6 +1743,10 @@ void PrintItemOil(char iDidx)
 		break;
 	case IMISC_FULLREJUV:
 		AddItemInfoBoxString(_("restore all life and mana"));
+		break;
+	case IMISC_SOULSTONE:
+		AddItemInfoBoxString(_("Contains Diablo's essence"));
+		AddItemInfoBoxString(_("Right-click to use"));
 		break;
 	case IMISC_ARENAPOT:
 		AddItemInfoBoxString(_("restore all life and mana"));
