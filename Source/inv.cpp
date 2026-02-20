@@ -34,6 +34,7 @@
 #include "levels/tile_properties.hpp"
 #include "levels/town.h"
 #include "minitext.h"
+#include "monster.h"
 #include "options.h"
 #include "panels/ui_panels.hpp"
 #include "player.h"
