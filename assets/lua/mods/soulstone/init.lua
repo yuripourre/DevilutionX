@@ -1,14 +1,10 @@
 -- Soulstone Mod
 --
--- Implements Diablo's Soulstone quest item:
---   - Spawns the soulstone when Diablo dies (at the moment the death explosion fires).
+-- Implements Diablo's Soulstone quest item entirely in Lua:
+--   - Defines the soulstone item using the custom items API (no TSV, no custom sprite).
+--   - Spawns the soulstone when Diablo dies (at the last frame of his death animation).
 --   - Right-clicking the soulstone on level 16, after Diablo is defeated, triggers
 --     the game-ending sequence on all clients (multiplayer included).
---
--- This mod requires the soulstone item to be defined in itemdat.tsv with:
---   IDidx = IDI_SOULSTONE  (ItemIndex.Soulstone in Lua)
---   miscId = IMISC_SOULSTONE
--- and the SOULSTONE cursor sprite to be present in data/inv/soulstone.clx.
 
 local events   = require("devilutionx.events")
 local items    = require("devilutionx.items")
@@ -16,34 +12,53 @@ local monsters = require("devilutionx.monsters")
 local player   = require("devilutionx.player")
 local game     = require("devilutionx.game")
 
--- The death animation frame at which Diablo's explosion fires and the
--- soulstone should appear on the ground.
-local DIABLO_EXPLOSION_FRAME = 140
+-- ─── Item definition ─────────────────────────────────────────────────────────
 
--- ─── Soulstone spawn ─────────────────────────────────────────────────────────
+local SOULSTONE_MAPPING_ID = 10001
+-- Frame 36 of objcurs.cel (the bloodstone graphic) is reused as the soulstone cursor.
+local SOULSTONE_CURSOR = 36
+
+items.addItem({
+  mappingId     = SOULSTONE_MAPPING_ID,
+  name          = "Soulstone",
+  shortName     = "Soulstone",
+  type          = items.ItemType.Misc,
+  class         = items.ItemClass.Quest,
+  equipType     = items.ItemEquipType.Unequipable,
+  cursorGraphic = SOULSTONE_CURSOR,
+  usable        = true,
+  value         = 0,
+  dropRate      = 0,
+})
+
+local soulstonItemIdx = items.getItemIndex(SOULSTONE_MAPPING_ID)
+
+-- ─── Diablo death: explosion + soulstone + invalidate ────────────────────────
+
+-- C++ fires OnMonsterDeath (cancellable) at the last frame of the death animation.
+-- Returning true skips the default corpse/invalidate; we handle cleanup ourselves.
 
 events.OnMonsterDeath.add(function(monster, deathFrame)
   if monster.typeId ~= monsters.MonsterID.Diablo then
-    return
-  end
-  if deathFrame ~= DIABLO_EXPLOSION_FRAME then
-    return
+    return false
   end
 
   local pos = monster.position
-  -- sendmsg=true syncs the item across all clients in multiplayer.
-  items.spawnQuestItem(items.ItemIndex.Soulstone, pos.x, pos.y, true)
+  game.addBigExplosionAt(pos.x, pos.y)
+  items.spawnQuestItem(soulstonItemIdx, pos.x, pos.y, true)
+  game.invalidateMonster(monster)
 
   local self = player.self()
   if self ~= nil then
     self:say(player.HeroSpeech.VengeanceIsMine)
   end
+  return true
 end)
 
 -- ─── Soulstone use ───────────────────────────────────────────────────────────
 
 events.OnItemUse.add(function(p, item)
-  if item.IDidx ~= items.ItemIndex.Soulstone then
+  if item.curs ~= SOULSTONE_CURSOR then
     return false
   end
 

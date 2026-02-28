@@ -3,6 +3,7 @@
 #include <sol/sol.hpp>
 
 #include "lua/metadoc.hpp"
+#include "missiles.h"
 #include "monster.h"
 #include "multi.h"
 #include "quests.h"
@@ -27,6 +28,18 @@ sol::table LuaGameModule(sol::state_view &lua)
 	LuaSetDocFn(table, "isMultiplayer", "() -> boolean",
 	    "Returns true when running in a multiplayer session.",
 	    []() { return gbIsMultiplayer; });
+
+	LuaSetDocFn(table, "addBigExplosionAt", "(x: integer, y: integer)",
+	    "Spawns a BigExplosion missile at (x, y). Used e.g. for Diablo death. Visual only, no caster.",
+	    [](int x, int y) {
+		    LuaAddBigExplosionAt(x, y);
+	    });
+
+	LuaSetDocFn(table, "invalidateMonster", "(monster: Monster)",
+	    "Removes the monster from the map and marks it invalid. Call when Lua handles death (e.g. no corpse).",
+	    [](const Monster &monster) {
+		    LuaInvalidateMonster(const_cast<Monster &>(monster));
+	    });
 
 	// Named constants for quest IDs (values match the quest_id enum in tables/objdat.h).
 	table["QuestID"] = lua.create_table_with(
