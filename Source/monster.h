@@ -584,5 +584,7 @@ void SpawnGolem(const Player &player, Point position, uint8_t spellLevel);
 bool CanTalkToMonst(const Monster &monster);
 uint8_t encode_enemy(Monster &monster);
 void decode_enemy(Monster &monster, uint8_t enemyId);
+/** @brief For Lua: clear monster from map and mark invalid (call when Lua handles death). */
+void LuaInvalidateMonster(Monster &monster);
 
 } // namespace devilution

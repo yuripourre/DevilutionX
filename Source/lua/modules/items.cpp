@@ -570,6 +570,14 @@ void LuaSpawnQuestItem(int itemIdx, int x, int y, bool sendmsg)
 	SpawnQuestItem(static_cast<_item_indexes>(itemIdx), Point { x, y }, 0, SelectionRegion::Bottom, sendmsg);
 }
 
+sol::optional<int> LuaGetItemIndex(int32_t mappingId)
+{
+	auto it = ItemMappingIdsToIndices.find(mappingId);
+	if (it == ItemMappingIdsToIndices.end())
+		return sol::nullopt;
+	return static_cast<int>(it->second);
+}
+
 } // namespace
 
 sol::table LuaItemModule(sol::state_view &lua)
@@ -598,6 +606,10 @@ sol::table LuaItemModule(sol::state_view &lua)
 	    "(itemIdx: ItemIndex, x: integer, y: integer, sendmsg: boolean = true)",
 	    "Spawns a quest item at the given world coordinates. Pass sendmsg=true to sync with other clients.",
 	    LuaSpawnQuestItem);
+	LuaSetDocFn(table, "getItemIndex",
+	    "(mappingId: integer) -> integer|nil",
+	    "Returns the AllItemsList index for a custom item registered with addItem(), or nil if not found.",
+	    LuaGetItemIndex);
 
 	// Expose enums through the module table
 	table["ItemIndex"] = lua["ItemIndex"];

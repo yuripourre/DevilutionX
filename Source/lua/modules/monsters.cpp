@@ -29,6 +29,13 @@ void AddUniqueMonsterDataFromTsv(const std::string_view path)
 	LoadUniqueMonstDatFromFile(dataFile, path);
 }
 
+void InitPointUserType(sol::state_view &lua)
+{
+	sol::usertype<Point> pointType = lua.new_usertype<Point>(sol::no_constructor);
+	pointType["x"] = &Point::x;
+	pointType["y"] = &Point::y;
+}
+
 void InitMonsterUserType(sol::state_view &lua)
 {
 	sol::usertype<Monster> monsterType = lua.new_usertype<Monster>(sol::no_constructor);
@@ -58,6 +65,7 @@ void InitMonsterUserType(sol::state_view &lua)
 
 sol::table LuaMonstersModule(sol::state_view &lua)
 {
+	InitPointUserType(lua);
 	InitMonsterUserType(lua);
 	sol::table table = lua.create_table();
 	LuaSetDocFn(table, "addMonsterDataFromTsv", "(path: string)", AddMonsterDataFromTsv);

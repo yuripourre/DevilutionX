@@ -81,6 +81,7 @@
 #include "player.h"
 #include "quests.h"
 #include "sound_effect_enums.h"
+#include "lua/lua_global.hpp"
 #include "storm/storm_net.hpp"
 #include "tables/itemdat.h"
 #include "tables/misdat.h"
@@ -1123,9 +1124,9 @@ void MonsterAttackMonster(Monster &attacker, Monster &target, int hper, int mind
 		target.tag(player);
 	}
 
-	if (target.hasNoLife()) {
+	if (target.hasNoLife() && target.mode != MonsterMode::Death) {
 		StartDeathFromMonster(attacker, target);
-	} else {
+	} else if (!target.hasNoLife()) {
 		MonsterHitMonster(attacker, target, dam);
 	}
 
@@ -1143,9 +1144,9 @@ int CheckReflect(Monster &monster, Player &player, int dam)
 	// reflects 20-30% damage
 	const int mdam = dam * RandomIntBetween(20, 30, true) / 100;
 	ApplyMonsterDamage(DamageType::Physical, monster, mdam);
-	if (monster.hasNoLife())
+	if (monster.hasNoLife() && monster.mode != MonsterMode::Death)
 		M_StartKill(monster, player);
-	else
+	else if (!monster.hasNoLife())
 		M_StartHit(monster, player, mdam);
 
 	return mdam;
@@ -1223,9 +1224,9 @@ void MonsterAttackPlayer(Monster &monster, Player &player, int hit, int minDam, 
 	if (HasAnyOf(player._pIFlags, ItemSpecialEffect::Thorns) && monster.mode != MonsterMode::Death) {
 		const int mdam = (GenerateRnd(3) + 1) << 6;
 		ApplyMonsterDamage(DamageType::Physical, monster, mdam);
-		if (monster.hasNoLife())
+		if (monster.hasNoLife() && monster.mode != MonsterMode::Death)
 			M_StartKill(monster, player);
-		else
+		else if (!monster.hasNoLife())
 			M_StartHit(monster, player, mdam);
 	}
 
@@ -1491,27 +1492,27 @@ void ShrinkLeaderPacksize(const Monster &monster)
 
 void MonsterDeath(Monster &monster)
 {
-	monster.var1++;
-	LuaEvent("OnMonsterDeath", &monster, monster.var1);
-	if (monster.type().type == MT_DIABLO) {
-		constexpr int SoulstoneSpawnFrame = 140;
-		if (monster.var1 == SoulstoneSpawnFrame) {
-			const Point pos = monster.position.tile;
-			AddMissile(pos, pos, Direction::South, MissileID::BigExplosion, TARGET_PLAYERS, monster, 0, 0);
-			dMonster[pos.x][pos.y] = 0;
-			monster.isInvalid = true;
-		}
-	} else if (monster.animInfo.isLastFrame()) {
-		if (monster.isUnique())
-			AddCorpse(monster.position.tile, monster.corpseId, monster.direction);
-		else
-			AddCorpse(monster.position.tile, monster.type().corpseId, monster.direction);
-
-		dMonster[monster.position.tile.x][monster.position.tile.y] = 0;
-		monster.isInvalid = true;
-
-		M_UpdateRelations(monster);
+	if (!monster.animInfo.isLastFrame()) {
+		return;
 	}
+	if (LuaEventCancellable("OnMonsterDeath", &monster, monster.animInfo.currentFrame)) {
+		return;
+	}
+	if (monster.isUnique())
+		AddCorpse(monster.position.tile, monster.corpseId, monster.direction);
+	else
+		AddCorpse(monster.position.tile, monster.type().corpseId, monster.direction);
+
+	dMonster[monster.position.tile.x][monster.position.tile.y] = 0;
+	monster.isInvalid = true;
+
+	M_UpdateRelations(monster);
+}
+
+void LuaInvalidateMonster(Monster &monster)
+{
+	dMonster[monster.position.tile.x][monster.position.tile.y] = 0;
+	monster.isInvalid = true;
 }
 
 bool MonsterSpecialStand(Monster &monster)

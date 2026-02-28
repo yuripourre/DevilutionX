@@ -488,6 +488,8 @@ void ProcessRedPortal(Missile &missile);
 void ProcessMissiles();
 void SetUpMissileAnimationData();
 void RedoMissileFlags();
+/** @brief For Lua: spawn BigExplosion at (x, y). No caster (visual only). */
+void LuaAddBigExplosionAt(int x, int y);
 
 #ifdef BUILD_TESTING
 void TestRotateBlockedMissile(Missile &missile);

@@ -690,9 +690,9 @@ bool PlrHitMonst(Player &player, Monster &monster, bool adjacentDamage = false)
 		}
 		RedrawComponent(PanelDrawComponent::Health);
 	}
-	if (monster.hasNoLife()) {
+	if (monster.hasNoLife() && monster.mode != MonsterMode::Death) {
 		M_StartKill(monster, player);
-	} else {
+	} else if (!monster.hasNoLife()) {
 		if (monster.mode != MonsterMode::Petrified && HasAnyOf(player._pIFlags, ItemSpecialEffect::Knockback))
 			M_GetKnockback(monster, player.position.tile);
 		M_StartHit(monster, player, dam);

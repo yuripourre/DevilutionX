@@ -117,9 +117,10 @@ local events = {
   OnPlayerGainExperience = CreateEvent(),
   __doc_OnPlayerGainExperience = "Called when Player gains experience.",
 
-  ---Called each frame of a monster's death animation. Arguments: monster, deathFrame (integer).
-  OnMonsterDeath = CreateEvent(),
-  __doc_OnMonsterDeath = "Called each frame of a monster's death animation. Arguments: monster, deathFrame.",
+  ---Called when a monster's death animation reaches its last frame. Arguments: monster, deathFrame (integer).
+  ---If any handler returns true the engine skips default corpse/invalidate; the mod must handle cleanup.
+  OnMonsterDeath = CreateCancellableEvent(),
+  __doc_OnMonsterDeath = "Called at last frame of death animation. Return true to handle death yourself (e.g. explosion, no corpse).",
 
   ---Called when a player is about to use an item. Arguments: player, item.
   ---If any handler returns true the default item-use behaviour is cancelled.

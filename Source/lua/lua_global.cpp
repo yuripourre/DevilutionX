@@ -396,6 +396,30 @@ bool LuaEventCancellable(std::string_view name, const Player *player, const Item
 	return retVal.is<bool>() && retVal.as<bool>();
 }
 
+bool LuaEventCancellable(std::string_view name, const Monster *monster, int arg1)
+{
+	if (!CurrentLuaState.has_value()) {
+		return false;
+	}
+
+	const auto trigger = CurrentLuaState->events.traverse_get<std::optional<sol::object>>(name, "trigger");
+	if (!trigger.has_value() || !trigger->is<sol::protected_function>()) {
+		LogError("events.{}.trigger is not a function", name);
+		return false;
+	}
+	const sol::protected_function fn = trigger->as<sol::protected_function>();
+	const sol::protected_function_result result = fn(monster, arg1);
+	if (!result.valid()) {
+		const std::string error = result.get_type() == sol::type::string
+		    ? StrCat("Lua error: ", result.get<std::string>())
+		    : "Unknown Lua error";
+		LogError(error);
+		return false;
+	}
+	const sol::object retVal = result;
+	return retVal.is<bool>() && retVal.as<bool>();
+}
+
 sol::state &GetLuaState()
 {
 	return CurrentLuaState->sol;

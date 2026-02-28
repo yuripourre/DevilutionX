@@ -4287,4 +4287,10 @@ void RedoMissileFlags()
 	}
 }
 
+void LuaAddBigExplosionAt(int x, int y)
+{
+	const Point position { x, y };
+	AddMissile(position, position, Direction::South, MissileID::BigExplosion, TARGET_MONSTERS, -1, 0, 0);
+}
+
 } // namespace devilution
