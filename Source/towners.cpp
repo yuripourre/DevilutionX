@@ -5,6 +5,8 @@
 #include <unordered_map>
 
 #include "cursor.h"
+#include "levels/town_data.h"
+#include "lua/lua_event.hpp"
 #include "engine/clx_sprite.hpp"
 #include "engine/load_cel.hpp"
 #include "engine/load_file.hpp"
@@ -795,6 +797,22 @@ void InitTowners()
 		Towners.emplace_back();
 		InitTownerInfo(Towners.back(), *behaviorIt->second, entry);
 		i++;
+	}
+
+	// Apply towner position overrides from the active town config
+	const std::string &currentTown = GetTownRegistry().GetCurrentTown();
+	if (GetTownRegistry().HasTown(currentTown)) {
+		const TownConfig &config = GetTownRegistry().GetTown(currentTown);
+		for (const auto &override : config.townerOverrides) {
+			for (auto &towner : Towners) {
+				auto shortNameIt = TownerShortNames.find(towner._ttype);
+				if (shortNameIt != TownerShortNames.end() && shortNameIt->second == override.shortName) {
+					dMonster[towner.position.x][towner.position.y] = 0;
+					towner.position = override.position;
+					dMonster[towner.position.x][towner.position.y] = static_cast<int16_t>(&towner - Towners.data() + 1);
+				}
+			}
+		}
 	}
 }
 
