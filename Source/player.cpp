@@ -2364,6 +2364,9 @@ void CreatePlayer(Player &player, HeroClass c)
 	player.pDamAcFlags = ItemSpecialEffectHf::None;
 	player.wReflections = 0;
 
+	// Initialize town data (start in Tristram, ID 0)
+	player._pCurrentTownId = 0;
+
 	InitDungMsgs(player);
 	CreatePlrItems(player);
 	SetRndSeed(0);
