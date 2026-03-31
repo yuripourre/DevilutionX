@@ -24,6 +24,7 @@
 #include "levels/drlg_l4.h"
 #include "levels/reencode_dun_cels.hpp"
 #include "levels/town.h"
+#include "levels/town_data.h"
 #include "lighting.h"
 #include "monster.h"
 #include "objects.h"
@@ -812,6 +813,7 @@ bool IsNearThemeRoom(WorldTilePosition testPosition)
 
 void InitLevels()
 {
+	InitializeTristram();
 	currlevel = 0;
 	leveltype = DTYPE_TOWN;
 	setlevel = false;
