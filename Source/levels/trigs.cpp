@@ -16,10 +16,12 @@
 #include "cursor.h"
 #include "diablo_msg.hpp"
 #include "game_mode.hpp"
+#include "levels/town_data.h"
 #include "multi.h"
 #include "utils/algorithm/container.hpp"
 #include "utils/is_of.hpp"
 #include "utils/language.h"
+#include "utils/log.hpp"
 #include "utils/utf8.hpp"
 
 namespace devilution {
@@ -110,44 +112,27 @@ bool IsWarpOpen(dungeon_type type)
 void InitTownTriggers()
 {
 	numtrigs = 0;
-
-	// Cathedral
-	trigs[numtrigs].position = { 25, 29 };
-	trigs[numtrigs]._tmsg = WM_DIABNEXTLVL;
-	numtrigs++;
-
-	if (IsWarpOpen(DTYPE_CATACOMBS)) {
-		trigs[numtrigs].position = { 49, 21 };
-		trigs[numtrigs]._tmsg = WM_DIABTOWNWARP;
-		trigs[numtrigs]._tlvl = 5;
-		numtrigs++;
-	}
-	if (IsWarpOpen(DTYPE_CAVES)) {
-		trigs[numtrigs].position = { 17, 69 };
-		trigs[numtrigs]._tmsg = WM_DIABTOWNWARP;
-		trigs[numtrigs]._tlvl = 9;
-		numtrigs++;
-	}
-	if (IsWarpOpen(DTYPE_HELL)) {
-		trigs[numtrigs].position = { 41, 80 };
-		trigs[numtrigs]._tmsg = WM_DIABTOWNWARP;
-		trigs[numtrigs]._tlvl = 13;
-		numtrigs++;
-	}
-	if (IsWarpOpen(DTYPE_NEST)) {
-		trigs[numtrigs].position = { 80, 62 };
-		trigs[numtrigs]._tmsg = WM_DIABTOWNWARP;
-		trigs[numtrigs]._tlvl = 17;
-		numtrigs++;
-	}
-	if (IsWarpOpen(DTYPE_CRYPT)) {
-		trigs[numtrigs].position = { 36, 24 };
-		trigs[numtrigs]._tmsg = WM_DIABTOWNWARP;
-		trigs[numtrigs]._tlvl = 21;
-		numtrigs++;
-	}
-
 	trigflag = false;
+
+	const std::string &townId = GetTownRegistry().GetCurrentTown();
+	if (!GetTownRegistry().HasTown(townId)) {
+		LogError("InitTownTriggers: current town '{}' not registered", townId);
+		return;
+	}
+
+	const TownConfig &town = GetTownRegistry().GetTown(townId);
+	for (const TownTrigger &trigger : town.triggers) {
+		if (trigger.warpGate.has_value() && !IsWarpOpen(*trigger.warpGate))
+			continue;
+		if (numtrigs >= MAXTRIGGERS) {
+			LogError("InitTownTriggers: more than MAXTRIGGERS ({}) for town '{}'", MAXTRIGGERS, townId);
+			break;
+		}
+		trigs[numtrigs].position = trigger.position;
+		trigs[numtrigs]._tmsg = trigger.message;
+		trigs[numtrigs]._tlvl = trigger.targetLevel;
+		numtrigs++;
+	}
 }
 
 void InitL1Triggers()
