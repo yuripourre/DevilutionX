@@ -2531,7 +2531,7 @@ tl::expected<void, std::string> LoadGame(bool firstflag)
 	if (GetTownRegistry().HasTown(townId)) {
 		GetTownRegistry().SetCurrentTown(townId);
 	} else {
-		GetTownRegistry().SetCurrentTown("tristram");
+		GetTownRegistry().SetCurrentTown(TristramTownId);
 		myPlayer._pCurrentTownId = 0;
 	}
 
