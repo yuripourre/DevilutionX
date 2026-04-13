@@ -1530,6 +1530,28 @@ void SmithRepairEnter()
 
 void WitchEnter()
 {
+	if (*GetOptions().Gameplay.visualStoreUI) {
+		switch (CurrentTextLine) {
+		case 12:
+			OldTextLine = 12;
+			TownerId = TOWN_WITCH;
+			OldActiveStore = TalkID::Witch;
+			StartStore(TalkID::Gossip);
+			break;
+		case 14:
+			ActiveStore = TalkID::None;
+			OpenVisualStore(VisualStoreVendor::Witch);
+			break;
+		case 16:
+			StartStore(TalkID::WitchRecharge);
+			break;
+		case 18:
+			ActiveStore = TalkID::None;
+			break;
+		}
+		return;
+	}
+
 	switch (CurrentTextLine) {
 	case 12:
 		OldTextLine = 12;
@@ -1538,20 +1560,10 @@ void WitchEnter()
 		StartStore(TalkID::Gossip);
 		break;
 	case 14:
-		if (*GetOptions().Gameplay.visualStoreUI) {
-			ActiveStore = TalkID::None;
-			OpenVisualStore(VisualStoreVendor::Witch);
-		} else {
-			StartStore(TalkID::WitchBuy);
-		}
+		StartStore(TalkID::WitchBuy);
 		break;
 	case 16:
-		if (*GetOptions().Gameplay.visualStoreUI) {
-			ActiveStore = TalkID::None;
-			OpenVisualStore(VisualStoreVendor::Witch);
-		} else {
-			StartStore(TalkID::WitchSell);
-		}
+		StartStore(TalkID::WitchSell);
 		break;
 	case 18:
 		StartStore(TalkID::WitchRecharge);
@@ -1660,7 +1672,7 @@ void WitchRechargeEnter()
 {
 	if (CurrentTextLine == BackButtonLine()) {
 		StartStore(TalkID::Witch);
-		CurrentTextLine = 18;
+		CurrentTextLine = *GetOptions().Gameplay.visualStoreUI ? 16 : 18;
 		return;
 	}
 
@@ -2517,7 +2529,7 @@ void StoreESC()
 		break;
 	case TalkID::WitchRecharge:
 		StartStore(TalkID::Witch);
-		CurrentTextLine = 18;
+		CurrentTextLine = *GetOptions().Gameplay.visualStoreUI ? 16 : 18;
 		break;
 	case TalkID::HealerBuy:
 		StartStore(TalkID::Healer);
