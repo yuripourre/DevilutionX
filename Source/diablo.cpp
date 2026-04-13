@@ -1404,7 +1404,17 @@ tl::expected<void, std::string> LoadLvlGFX()
 			pMegaTiles = std::move(*til);
 		}
 
-		ASSIGN_OR_RETURN(pSpecialCels, LoadCelWithStatus(active.specialCelsPath.c_str(), SpecialCelWidth));
+		// Special CELs: try active path, fall back to Tristram's if different.
+		auto specialCels = LoadCelWithStatus(active.specialCelsPath.c_str(), SpecialCelWidth);
+		if (!specialCels.has_value()) {
+			if (active.specialCelsPath != tristramAssets.specialCelsPath) {
+				ASSIGN_OR_RETURN(pSpecialCels, LoadCelWithStatus(tristramAssets.specialCelsPath.c_str(), SpecialCelWidth));
+			} else {
+				return tl::make_unexpected(std::move(specialCels.error()));
+			}
+		} else {
+			pSpecialCels = std::move(*specialCels);
+		}
 		return {};
 	}
 	case DTYPE_CATHEDRAL:
