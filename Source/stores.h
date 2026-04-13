@@ -130,7 +130,8 @@ DVL_API_FOR_TEST const char *TownerNameForTalkID(TalkID s);
 /**
  * @brief Registers a dynamic dialog option for a towner's talk menu.
  *
- * Options are inserted into empty even-numbered lines before the towner's "leave" option.
+ * Options are inserted into empty even-numbered lines before the towner's "leave" option,
+ * after existing menu lines on even rows (so default choices like "Talk to …" stay first).
  * If no empty lines are available the option is silently skipped for that dialog session
  * and a warning is logged.
  *

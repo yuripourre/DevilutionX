@@ -2400,9 +2400,15 @@ void StartStore(TalkID s)
 				}
 			}
 
-			// Insert extra options into empty even-numbered lines before the leave option.
+			// Insert extra options into empty even-numbered lines before the leave option,
+			// after any existing menu lines (so e.g. "Talk to Farnham" stays above mod options).
+			int firstExtraOptionLine = 10;
+			for (int line = 10; line < lastSelectableLine; line += 2) {
+				if (TextLine[line].hasText())
+					firstExtraOptionLine = line + 2;
+			}
 			size_t optIdx = 0;
-			for (int line = 10; line < lastSelectableLine && optIdx < extraOpts->size(); line += 2) {
+			for (int line = firstExtraOptionLine; line < lastSelectableLine && optIdx < extraOpts->size(); line += 2) {
 				if (TextLine[line].hasText()) continue;
 				std::string label = (*extraOpts)[optIdx].getLabel();
 				if (!label.empty()) {
