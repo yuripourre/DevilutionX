@@ -604,10 +604,10 @@ int8_t DefaultDropAnimForItemType(ItemType type);
 int8_t GetItemAnimType(const Item &item);
 
 /** Returns the inventory placement sound for an item. */
-SfxID GetItemInvSfx(const Item &item);
+SfxID GetItemInvSnd(const Item &item);
 
 /** Returns the floor drop sound for an item. */
-SfxID GetItemDropSfx(const Item &item);
+SfxID GetItemDropSnd(const Item &item);
 
 /* data */
 
