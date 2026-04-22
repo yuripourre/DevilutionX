@@ -85,4 +85,13 @@ void FreeHalfSizeItemSprites();
 /** Returns the width and height for an inventory index. */
 Size GetInvItemSize(int cursId);
 
+/** The first _iCurs value used for custom (mod-registered) cursor graphics. */
+constexpr int CustomCursorGraphicBase = 229;
+
+/** Registers a custom cursor sprite and returns the _iCurs value to use. */
+int RegisterCustomCursorGraphic(OwnedClxSpriteList sprite);
+
+/** Frees all custom cursor sprites. */
+void FreeCustomCursorSprites();
+
 } // namespace devilution

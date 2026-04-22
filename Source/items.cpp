@@ -181,6 +181,14 @@ namespace {
 
 OptionalOwnedClxSpriteList itemanims[ITEMTYPES];
 
+struct CustomDropAnimData {
+	OwnedClxSpriteList sprites;
+	int8_t numFrames;
+};
+
+std::vector<CustomDropAnimData> customDropAnims;
+ankerl::unordered_dense::map<int, int> customCursToDropAnim;
+
 enum class PlayerArmorGraphic : uint8_t {
 	// clang-format off
 	Light  = 0,
@@ -3832,6 +3840,24 @@ int8_t DefaultDropAnimForItemType(ItemType type)
 	}
 }
 
+int RegisterCustomDropAnim(OwnedClxSpriteList sprites, int8_t numFrames)
+{
+	const int id = static_cast<int>(customDropAnims.size());
+	customDropAnims.push_back({ std::move(sprites), numFrames });
+	return id;
+}
+
+void SetCustomDropAnim(int iCurs, int dropAnimId)
+{
+	customCursToDropAnim[iCurs] = dropAnimId;
+}
+
+void FreeCustomDropAnims()
+{
+	customDropAnims.clear();
+	customCursToDropAnim.clear();
+}
+
 int8_t GetItemAnimType(const Item &item)
 {
 	if (item._iCurs >= static_cast<uint8_t>(sizeof(ItemCAnimTbl)))
@@ -3851,6 +3877,18 @@ SfxID GetItemDropSfx(const Item &item)
 
 void GetItemFrm(Item &item)
 {
+	if (item._iCurs >= CustomCursorGraphicBase) {
+		auto dropIt = customCursToDropAnim.find(item._iCurs);
+		if (dropIt != customCursToDropAnim.end() && dropIt->second >= 0
+		    && static_cast<size_t>(dropIt->second) < customDropAnims.size()) {
+			item.AnimInfo.sprites.emplace(customDropAnims[static_cast<size_t>(dropIt->second)].sprites);
+		} else {
+			const int it = DefaultDropAnimForItemType(item._itype);
+			if (itemanims[it])
+				item.AnimInfo.sprites.emplace(*itemanims[it]);
+		}
+		return;
+	}
 	const int it = GetItemAnimType(item);
 	if (itemanims[it])
 		item.AnimInfo.sprites.emplace(*itemanims[it]);
@@ -4843,9 +4881,27 @@ bool Item::isUsable() const
 
 void Item::setNewAnimation(bool showAnimation)
 {
-	const int8_t it = GetItemAnimType(*this);
-	const int8_t numberOfFrames = ItemAnimLs[it];
-	const OptionalClxSpriteList sprite = itemanims[it] ? OptionalClxSpriteList { *itemanims[static_cast<size_t>(it)] } : std::nullopt;
+	int8_t numberOfFrames;
+	OptionalClxSpriteList sprite;
+
+	if (_iCurs >= CustomCursorGraphicBase) {
+		auto dropIt = customCursToDropAnim.find(_iCurs);
+		if (dropIt != customCursToDropAnim.end() && dropIt->second >= 0
+		    && static_cast<size_t>(dropIt->second) < customDropAnims.size()) {
+			auto &dropAnim = customDropAnims[static_cast<size_t>(dropIt->second)];
+			numberOfFrames = dropAnim.numFrames;
+			sprite = OptionalClxSpriteList { dropAnim.sprites };
+		} else {
+			const int8_t it = DefaultDropAnimForItemType(_itype);
+			numberOfFrames = ItemAnimLs[it];
+			sprite = itemanims[it] ? OptionalClxSpriteList { *itemanims[static_cast<size_t>(it)] } : std::nullopt;
+		}
+	} else {
+		const int8_t it = GetItemAnimType(*this);
+		numberOfFrames = ItemAnimLs[it];
+		sprite = itemanims[it] ? OptionalClxSpriteList { *itemanims[static_cast<size_t>(it)] } : std::nullopt;
+	}
+
 	if (_iCurs != ICURS_MAGIC_ROCK)
 		AnimInfo.setNewAnimation(sprite, numberOfFrames, 1, AnimationDistributionFlags::ProcessAnimationPending, 0, numberOfFrames);
 	else

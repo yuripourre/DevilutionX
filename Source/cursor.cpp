@@ -65,8 +65,12 @@ namespace {
 OptionalOwnedClxSpriteList pCursCels;
 OptionalOwnedClxSpriteList pCursCels2;
 
+/** Custom cursor sprites registered by mods. */
+std::vector<OwnedClxSpriteList> customCursorSprites;
+
 OptionalOwnedClxSpriteList *HalfSizeItemSprites;
 OptionalOwnedClxSpriteList *HalfSizeItemSpritesRed;
+size_t numHalfSizeItemSprites = 0;
 
 bool IsValidMonsterForSelection(const Monster &monster)
 {
@@ -456,12 +460,21 @@ void FreeCursor()
 {
 	pCursCels = std::nullopt;
 	pCursCels2 = std::nullopt;
+	FreeCustomCursorSprites();
 	ClearCursor();
 }
 
 ClxSprite GetInvItemSprite(int cursId)
 {
 	assert(cursId > 0);
+
+	const int iCurs = cursId - static_cast<int>(CURSOR_FIRSTITEM);
+	if (iCurs >= CustomCursorGraphicBase) {
+		const size_t customIdx = static_cast<size_t>(iCurs - CustomCursorGraphicBase);
+		assert(customIdx < customCursorSprites.size());
+		return customCursorSprites[customIdx][0];
+	}
+
 	const size_t numSprites = pCursCels->numSprites();
 	if (static_cast<size_t>(cursId) <= numSprites) {
 		return (*pCursCels)[cursId - 1];
@@ -479,11 +492,17 @@ Size GetInvItemSize(int cursId)
 
 ClxSprite GetHalfSizeItemSprite(int cursId)
 {
+	if (cursId >= CustomCursorGraphicBase || static_cast<size_t>(cursId) >= numHalfSizeItemSprites || !HalfSizeItemSprites[cursId]) {
+		return GetInvItemSprite(static_cast<int>(CURSOR_FIRSTITEM) + cursId);
+	}
 	return (*HalfSizeItemSprites[cursId])[0];
 }
 
 ClxSprite GetHalfSizeItemSpriteRed(int cursId)
 {
+	if (cursId >= CustomCursorGraphicBase || static_cast<size_t>(cursId) >= numHalfSizeItemSprites || !HalfSizeItemSpritesRed[cursId]) {
+		return GetInvItemSprite(static_cast<int>(CURSOR_FIRSTITEM) + cursId);
+	}
 	return (*HalfSizeItemSpritesRed[cursId])[0];
 }
 
@@ -493,6 +512,7 @@ void CreateHalfSizeItemSprites()
 		return;
 	const uint32_t numInvItems = pCursCels->numSprites() - (static_cast<uint32_t>(CURSOR_FIRSTITEM) - 1)
 	    + (pCursCels2.has_value() ? pCursCels2->numSprites() : 0);
+	numHalfSizeItemSprites = numInvItems;
 	HalfSizeItemSprites = new OptionalOwnedClxSpriteList[numInvItems];
 	HalfSizeItemSpritesRed = new OptionalOwnedClxSpriteList[numInvItems];
 	const uint8_t *redTrn = GetInfravisionTRN();
@@ -545,6 +565,19 @@ void FreeHalfSizeItemSprites()
 		delete[] HalfSizeItemSpritesRed;
 		HalfSizeItemSpritesRed = nullptr;
 	}
+	numHalfSizeItemSprites = 0;
+}
+
+int RegisterCustomCursorGraphic(OwnedClxSpriteList sprite)
+{
+	const int iCurs = CustomCursorGraphicBase + static_cast<int>(customCursorSprites.size());
+	customCursorSprites.push_back(std::move(sprite));
+	return iCurs;
+}
+
+void FreeCustomCursorSprites()
+{
+	customCursorSprites.clear();
 }
 
 void DrawItem(const Item &item, const Surface &out, Point position, ClxSprite clx)

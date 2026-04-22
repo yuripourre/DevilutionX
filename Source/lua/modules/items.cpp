@@ -6,7 +6,9 @@
 #include <fmt/format.h>
 #include <sol/sol.hpp>
 
+#include "cursor.h"
 #include "data/file.hpp"
+#include "engine/load_cel.hpp"
 #include "items.h"
 #include "lua/metadoc.hpp"
 #include "player.h"
@@ -534,6 +536,19 @@ void AddUniqueItem(sol::table t)
 	UniqueItemMappingIdsToIndices.emplace(mappingId, static_cast<int32_t>(UniqueItems.size()) - 1);
 }
 
+int LuaRegisterCursorGraphic(const std::string &path, int width)
+{
+	OwnedClxSpriteList sprite = LoadCel(path.c_str(), static_cast<uint16_t>(width));
+	return RegisterCustomCursorGraphic(std::move(sprite));
+}
+
+void LuaRegisterDropGraphic(int iCurs, const std::string &path, int numFrames)
+{
+	OwnedClxSpriteList sprites = LoadCel(path.c_str(), ItemAnimWidth);
+	const int dropAnimId = RegisterCustomDropAnim(std::move(sprites), static_cast<int8_t>(numFrames));
+	SetCustomDropAnim(iCurs, dropAnimId);
+}
+
 } // namespace
 
 sol::table LuaItemModule(sol::state_view &lua)
@@ -555,6 +570,8 @@ sol::table LuaItemModule(sol::state_view &lua)
 	LuaSetDocFn(table, "addUniqueItemDataFromTsv", "(path: string, baseMappingId: number)", AddUniqueItemDataFromTsv);
 	LuaSetDocFn(table, "addItem", "(item: table)", "Add a new item definition from a Lua table. Required: name, mappingId. Optional: dropRate, class, equipType, cursorGraphic, type, uniqueBaseItem, shortName, minMonsterLevel, durability, minDam, maxDam, minAC, maxAC, minStr, minMag, minDex, flags, miscId, spell, usable, value.", AddItem);
 	LuaSetDocFn(table, "addUniqueItem", "(item: table)", "Add a new unique item definition from a Lua table. Required: name, mappingId. Optional: cursorGraphic, uniqueBaseItem, minLevel, value, powers (array of {type, param1, param2}).", AddUniqueItem);
+	LuaSetDocFn(table, "registerCursorGraphic", "(path: string, width: number) -> number", "Load a sprite for inventory/cursor display and return its cursorGraphic ID.", LuaRegisterCursorGraphic);
+	LuaSetDocFn(table, "registerDropGraphic", "(cursorGraphic: number, path: string, numFrames: number)", "Load a floor drop animation sprite for a custom cursor graphic. If not called, uses the default for the item type.", LuaRegisterDropGraphic);
 
 	// Expose enums through the module table
 	table["ItemIndex"] = lua["ItemIndex"];
