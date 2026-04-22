@@ -11,6 +11,7 @@
 
 #include <fmt/format.h>
 
+#include "cursor.h"
 #include "data/file.hpp"
 #include "data/iterators.hpp"
 #include "data/record_reader.hpp"
@@ -611,6 +612,8 @@ namespace {
 
 void LoadItemDat()
 {
+	FreeCustomCursorSprites();
+
 	const std::string_view filename = "txtdata\\items\\itemdat.tsv";
 	DataFile dataFile = DataFile::loadOrDie(filename);
 
