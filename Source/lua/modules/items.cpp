@@ -522,7 +522,7 @@ void AddUniqueItem(sol::table t)
 	item.UINumPL = 0;
 	sol::optional<sol::table> powers = t["powers"];
 	if (powers) {
-		for (size_t i = 1; i <= 6; ++i) {
+		for (size_t i = 1; i <= std::size(item.powers); ++i) {
 			sol::optional<sol::table> power = (*powers)[i];
 			if (!power) break;
 			item.powers[item.UINumPL].type = power->get_or<item_effect_type>("type", IPL_INVALID);

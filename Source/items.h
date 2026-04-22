@@ -592,7 +592,7 @@ int RegisterCustomDropAnim(OwnedClxSpriteList sprites, int8_t numFrames);
 void SetCustomDropAnim(int iCurs, int dropAnimId);
 
 /** Frees all custom drop animations. */
-void FreeCustomDropAnims();
+void FreeCustomItemData();
 
 /** Registers custom inventory and drop sounds for a cursor graphic ID. */
 void SetCustomItemSounds(int iCurs, SfxID invSound, SfxID dropSound);
@@ -611,6 +611,7 @@ SfxID GetItemDropSfx(const Item &item);
 extern int MaxGold;
 
 extern int8_t ItemCAnimTbl[];
+extern const int ItemCAnimTblSize;
 extern SfxID ItemInvSnds[];
 
 } // namespace devilution

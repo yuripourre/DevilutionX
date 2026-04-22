@@ -129,6 +129,7 @@ int8_t ItemCAnimTbl[] = {
 	3, 1, 6, 6, 6, 1, 8, 6, 11, 3,
 	6, 8, 1, 6, 6, 17, 40, 0, 0
 };
+const int ItemCAnimTblSize = static_cast<int>(sizeof(ItemCAnimTbl));
 
 /** Maps of drop sounds effect of placing the item in the inventory. */
 SfxID ItemInvSnds[] = {
@@ -3854,7 +3855,7 @@ void SetCustomDropAnim(int iCurs, int dropAnimId)
 	customCursToDropAnim[iCurs] = dropAnimId;
 }
 
-void FreeCustomDropAnims()
+void FreeCustomItemData()
 {
 	customDropAnims.clear();
 	customCursToDropAnim.clear();
@@ -3872,7 +3873,7 @@ void SetCustomItemSounds(int iCurs, SfxID invSound, SfxID dropSound)
 
 int8_t GetItemAnimType(const Item &item)
 {
-	if (item._iCurs >= static_cast<uint8_t>(sizeof(ItemCAnimTbl)))
+	if (item._iCurs >= ItemCAnimTblSize)
 		return DefaultDropAnimForItemType(item._itype);
 	return ItemCAnimTbl[item._iCurs];
 }
@@ -3895,16 +3896,10 @@ SfxID GetItemDropSfx(const Item &item)
 
 void GetItemFrm(Item &item)
 {
-	if (item._iCurs >= CustomCursorGraphicBase) {
-		auto dropIt = customCursToDropAnim.find(item._iCurs);
-		if (dropIt != customCursToDropAnim.end() && dropIt->second >= 0
-		    && static_cast<size_t>(dropIt->second) < customDropAnims.size()) {
-			item.AnimInfo.sprites.emplace(customDropAnims[static_cast<size_t>(dropIt->second)].sprites);
-		} else {
-			const int it = DefaultDropAnimForItemType(item._itype);
-			if (itemanims[it])
-				item.AnimInfo.sprites.emplace(*itemanims[it]);
-		}
+	auto dropIt = customCursToDropAnim.find(item._iCurs);
+	if (dropIt != customCursToDropAnim.end() && dropIt->second >= 0
+	    && static_cast<size_t>(dropIt->second) < customDropAnims.size()) {
+		item.AnimInfo.sprites.emplace(customDropAnims[static_cast<size_t>(dropIt->second)].sprites);
 		return;
 	}
 	const int it = GetItemAnimType(item);
@@ -4902,18 +4897,12 @@ void Item::setNewAnimation(bool showAnimation)
 	int8_t numberOfFrames;
 	OptionalClxSpriteList sprite;
 
-	if (_iCurs >= CustomCursorGraphicBase) {
-		auto dropIt = customCursToDropAnim.find(_iCurs);
-		if (dropIt != customCursToDropAnim.end() && dropIt->second >= 0
-		    && static_cast<size_t>(dropIt->second) < customDropAnims.size()) {
-			auto &dropAnim = customDropAnims[static_cast<size_t>(dropIt->second)];
-			numberOfFrames = dropAnim.numFrames;
-			sprite = OptionalClxSpriteList { dropAnim.sprites };
-		} else {
-			const int8_t it = DefaultDropAnimForItemType(_itype);
-			numberOfFrames = ItemAnimLs[it];
-			sprite = itemanims[it] ? OptionalClxSpriteList { *itemanims[static_cast<size_t>(it)] } : std::nullopt;
-		}
+	auto dropIt = customCursToDropAnim.find(_iCurs);
+	if (dropIt != customCursToDropAnim.end() && dropIt->second >= 0
+	    && static_cast<size_t>(dropIt->second) < customDropAnims.size()) {
+		auto &dropAnim = customDropAnims[static_cast<size_t>(dropIt->second)];
+		numberOfFrames = dropAnim.numFrames;
+		sprite = OptionalClxSpriteList { dropAnim.sprites };
 	} else {
 		const int8_t it = GetItemAnimType(*this);
 		numberOfFrames = ItemAnimLs[it];
