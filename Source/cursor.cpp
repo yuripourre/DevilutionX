@@ -463,7 +463,6 @@ void FreeCursor()
 {
 	pCursCels = std::nullopt;
 	pCursCels2 = std::nullopt;
-	FreeCustomCursorSprites();
 	ClearCursor();
 }
 
