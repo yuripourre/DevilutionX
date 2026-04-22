@@ -477,28 +477,28 @@ void AddItem(sol::table t)
 	}
 
 	ItemData item;
-	item.dropRate = static_cast<uint8_t>(t.get_or<int>("dropRate", 1));
-	item.iClass = t.get_or<item_class>("class", ICLASS_NONE);
-	item.iLoc = t.get_or<item_equip_type>("equipType", ILOC_NONE);
-	item.iCurs = static_cast<item_cursor_graphic>(t.get_or<int>("cursorGraphic", 0));
-	item.itype = t.get_or<ItemType>("type", ItemType::None);
-	item.iItemId = static_cast<unique_base_item>(t.get_or<int>("uniqueBaseItem", UITYPE_NONE));
+	item.dropRate = static_cast<uint8_t>(t.get_or("dropRate", 1));
+	item.iClass = t.get_or("class", ICLASS_NONE);
+	item.iLoc = t.get_or("equipType", ILOC_NONE);
+	item.iCurs = static_cast<item_cursor_graphic>(t.get_or("cursorGraphic", 0));
+	item.itype = t.get_or("type", ItemType::None);
+	item.iItemId = static_cast<unique_base_item>(t.get_or("uniqueBaseItem", UITYPE_NONE));
 	item.iName = t.get<std::string>("name");
-	item.iSName = t.get_or<std::string>("shortName", item.iName);
-	item.iMinMLvl = static_cast<uint8_t>(t.get_or<int>("minMonsterLevel", 0));
-	item.iDurability = static_cast<uint8_t>(t.get_or<int>("durability", 0));
-	item.iMinDam = static_cast<uint8_t>(t.get_or<int>("minDam", 0));
-	item.iMaxDam = static_cast<uint8_t>(t.get_or<int>("maxDam", 0));
-	item.iMinAC = static_cast<uint8_t>(t.get_or<int>("minAC", 0));
-	item.iMaxAC = static_cast<uint8_t>(t.get_or<int>("maxAC", 0));
-	item.iMinStr = static_cast<uint8_t>(t.get_or<int>("minStr", 0));
-	item.iMinMag = static_cast<uint8_t>(t.get_or<int>("minMag", 0));
-	item.iMinDex = static_cast<uint8_t>(t.get_or<int>("minDex", 0));
-	item.iFlags = t.get_or<ItemSpecialEffect>("flags", ItemSpecialEffect::None);
-	item.iMiscId = t.get_or<item_misc_id>("miscId", IMISC_NONE);
-	item.iSpell = t.get_or<SpellID>("spell", SpellID::Null);
-	item.iUsable = t.get_or<bool>("usable", false);
-	item.iValue = static_cast<uint16_t>(t.get_or<int>("value", 0));
+	item.iSName = t.get_or("shortName", item.iName);
+	item.iMinMLvl = static_cast<uint8_t>(t.get_or("minMonsterLevel", 0));
+	item.iDurability = static_cast<uint8_t>(t.get_or("durability", 0));
+	item.iMinDam = static_cast<uint8_t>(t.get_or("minDam", 0));
+	item.iMaxDam = static_cast<uint8_t>(t.get_or("maxDam", 0));
+	item.iMinAC = static_cast<uint8_t>(t.get_or("minAC", 0));
+	item.iMaxAC = static_cast<uint8_t>(t.get_or("maxAC", 0));
+	item.iMinStr = static_cast<uint8_t>(t.get_or("minStr", 0));
+	item.iMinMag = static_cast<uint8_t>(t.get_or("minMag", 0));
+	item.iMinDex = static_cast<uint8_t>(t.get_or("minDex", 0));
+	item.iFlags = t.get_or("flags", ItemSpecialEffect::None);
+	item.iMiscId = t.get_or("miscId", IMISC_NONE);
+	item.iSpell = t.get_or("spell", SpellID::Null);
+	item.iUsable = t.get_or("usable", false);
+	item.iValue = static_cast<uint16_t>(t.get_or("value", 0));
 	item.iMappingId = mappingId;
 
 	AllItemsList.push_back(std::move(item));
@@ -514,10 +514,10 @@ void AddUniqueItem(sol::table t)
 
 	UniqueItem item;
 	item.UIName = t.get<std::string>("name");
-	item.UICurs = static_cast<item_cursor_graphic>(t.get_or<int>("cursorGraphic", 0));
-	item.UIItemId = static_cast<unique_base_item>(t.get_or<int>("uniqueBaseItem", UITYPE_NONE));
-	item.UIMinLvl = static_cast<int8_t>(t.get_or<int>("minLevel", 0));
-	item.UIValue = t.get_or<int>("value", 0);
+	item.UICurs = static_cast<item_cursor_graphic>(t.get_or("cursorGraphic", 0));
+	item.UIItemId = static_cast<unique_base_item>(t.get_or("uniqueBaseItem", UITYPE_NONE));
+	item.UIMinLvl = static_cast<int8_t>(t.get_or("minLevel", 0));
+	item.UIValue = t.get_or("value", 0);
 
 	item.UINumPL = 0;
 	sol::optional<sol::table> powers = t["powers"];
@@ -525,9 +525,9 @@ void AddUniqueItem(sol::table t)
 		for (size_t i = 1; i <= std::size(item.powers); ++i) {
 			sol::optional<sol::table> power = (*powers)[i];
 			if (!power) break;
-			item.powers[item.UINumPL].type = power->get_or<item_effect_type>("type", IPL_INVALID);
-			item.powers[item.UINumPL].param1 = power->get_or<int>("param1", 0);
-			item.powers[item.UINumPL].param2 = power->get_or<int>("param2", 0);
+			item.powers[item.UINumPL].type = power->get_or("type", IPL_INVALID);
+			item.powers[item.UINumPL].param1 = power->get_or("param1", 0);
+			item.powers[item.UINumPL].param2 = power->get_or("param2", 0);
 			item.UINumPL++;
 		}
 	}

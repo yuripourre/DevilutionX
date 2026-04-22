@@ -597,6 +597,9 @@ void FreeCustomItemData();
 /** Registers custom inventory and drop sounds for a cursor graphic ID. */
 void SetCustomItemSounds(int iCurs, SfxID invSound, SfxID dropSound);
 
+/** Returns the default in-memory item animation index for a logical item type (see ITEMTYPES). */
+int8_t DefaultDropAnimForItemType(ItemType type);
+
 /** Returns the animation type index for an item, safe for custom cursor graphics. */
 int8_t GetItemAnimType(const Item &item);
 
