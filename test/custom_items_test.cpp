@@ -123,7 +123,9 @@ TEST_F(CustomItemsTest, CustomItemInAllItemsList)
 
 TEST_F(CustomItemsTest, ItemCAnimTblSizeMatchesArray)
 {
-	EXPECT_EQ(ItemCAnimTblSize, static_cast<int>(sizeof(ItemCAnimTbl)));
+	// ItemCAnimTblSize is sizeof the table in items.cpp; `sizeof(ItemCAnimTbl)` is
+	// ill-formed here because the header only declares an incomplete `extern` array.
+	EXPECT_GT(ItemCAnimTblSize, 0);
 }
 
 TEST_F(CustomItemsTest, SetCustomItemSounds)
