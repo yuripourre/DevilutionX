@@ -585,6 +585,15 @@ bool ApplyOilToItem(Item &item, Player &player);
  */
 void UpdateHellfireFlag(Item &item, const char *identifiedItemName);
 
+/** Returns the animation type index for an item, safe for custom cursor graphics. */
+int8_t GetItemAnimType(const Item &item);
+
+/** Returns the inventory placement sound for an item. */
+SfxID GetItemInvSfx(const Item &item);
+
+/** Returns the floor drop sound for an item. */
+SfxID GetItemDropSfx(const Item &item);
+
 /* data */
 
 extern int MaxGold;

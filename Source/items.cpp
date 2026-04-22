@@ -3733,7 +3733,6 @@ void SpawnTheodore(Point position, bool sendmsg)
 
 void RespawnItem(Item &item, bool flipFlag)
 {
-	const int it = ItemCAnimTbl[item._iCurs];
 	item.setNewAnimation(flipFlag);
 	item._iRequest = false; // Item isn't being picked up by a player
 
@@ -3757,7 +3756,7 @@ void RespawnItem(Item &item, bool flipFlag)
 		} else {
 			item.selectionRegion = SelectionRegion::Bottom; // Item is selectable at floor level and renders at floor level
 		}
-		PlaySfxLoc(ItemDropSnds[it], item.position); // Play the drop sound (this item is perpetually in a dropping state, but can always be picked up)
+		PlaySfxLoc(GetItemDropSfx(item), item.position); // Play the drop sound (this item is perpetually in a dropping state, but can always be picked up)
 		break;
 	}
 }
@@ -3793,7 +3792,7 @@ void ProcessItems()
 				item.AnimInfo.currentFrame = 10;                                                     // Beginning of elevated frames
 		} else {
 			if (item.AnimInfo.currentFrame == (item.AnimInfo.numberOfFrames - 1) / 2)
-				PlaySfxLoc(ItemDropSnds[ItemCAnimTbl[item._iCurs]], item.position);
+				PlaySfxLoc(GetItemDropSfx(item), item.position);
 
 			if (item.AnimInfo.isLastFrame()) {
 				item.AnimInfo.currentFrame = item.AnimInfo.numberOfFrames - 1;
@@ -3812,9 +3811,47 @@ void FreeItemGFX()
 	}
 }
 
+int8_t DefaultDropAnimForItemType(ItemType type)
+{
+	switch (type) {
+	case ItemType::Sword: return 8;       // swrdflip
+	case ItemType::Axe: return 1;         // axe
+	case ItemType::Bow: return 3;         // bow
+	case ItemType::Mace: return 6;        // mace
+	case ItemType::Shield: return 7;      // shield
+	case ItemType::LightArmor: return 14; // larmor
+	case ItemType::Helm: return 5;        // helmut
+	case ItemType::MediumArmor: return 0; // armor2
+	case ItemType::HeavyArmor: return 17; // fplatear
+	case ItemType::Staff: return 11;      // staff
+	case ItemType::Gold: return 4;        // goldflip
+	case ItemType::Ring: return 12;       // ring
+	case ItemType::Amulet: return 12;     // ring
+	case ItemType::Misc: return 2;        // fbttle
+	default: return 2;
+	}
+}
+
+int8_t GetItemAnimType(const Item &item)
+{
+	if (item._iCurs >= static_cast<uint8_t>(sizeof(ItemCAnimTbl)))
+		return DefaultDropAnimForItemType(item._itype);
+	return ItemCAnimTbl[item._iCurs];
+}
+
+SfxID GetItemInvSfx(const Item &item)
+{
+	return ItemInvSnds[GetItemAnimType(item)];
+}
+
+SfxID GetItemDropSfx(const Item &item)
+{
+	return ItemDropSnds[GetItemAnimType(item)];
+}
+
 void GetItemFrm(Item &item)
 {
-	const int it = ItemCAnimTbl[item._iCurs];
+	const int it = GetItemAnimType(item);
 	if (itemanims[it])
 		item.AnimInfo.sprites.emplace(*itemanims[it]);
 }
@@ -4806,7 +4843,7 @@ bool Item::isUsable() const
 
 void Item::setNewAnimation(bool showAnimation)
 {
-	const int8_t it = ItemCAnimTbl[_iCurs];
+	const int8_t it = GetItemAnimType(*this);
 	const int8_t numberOfFrames = ItemAnimLs[it];
 	const OptionalClxSpriteList sprite = itemanims[it] ? OptionalClxSpriteList { *itemanims[static_cast<size_t>(it)] } : std::nullopt;
 	if (_iCurs != ICURS_MAGIC_ROCK)
