@@ -127,7 +127,7 @@ int8_t ItemCAnimTbl[] = {
 	36, 36, 37, 38, 38, 38, 38, 38, 41, 42,
 	8, 8, 8, 17, 0, 6, 8, 11, 11, 3,
 	3, 1, 6, 6, 6, 1, 8, 6, 11, 3,
-	6, 8, 1, 6, 6, 17, 40, 0, 0
+	6, 8, 1, 6, 6, 17, 40, 0, 0, 0, 0
 };
 const int ItemCAnimTblSize = static_cast<int>(sizeof(ItemCAnimTbl));
 
