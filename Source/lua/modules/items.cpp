@@ -1,11 +1,11 @@
 #include "lua/modules/items.hpp"
 
-#include <stdexcept>
 #include <string_view>
 
 #include <fmt/format.h>
 #include <sol/sol.hpp>
 
+#include "appfat.h"
 #include "cursor.h"
 #include "data/file.hpp"
 #include "effects.h"
@@ -473,7 +473,7 @@ void AddItem(sol::table t)
 {
 	int32_t mappingId = t.get<int32_t>("mappingId");
 	if (ItemMappingIdsToIndices.count(mappingId) > 0) {
-		throw std::runtime_error(fmt::format("An item already exists for mapping ID {}.", mappingId));
+		app_fatal(fmt::format("An item already exists for mapping ID {}.", mappingId));
 	}
 
 	ItemData item;
@@ -509,7 +509,7 @@ void AddUniqueItem(sol::table t)
 {
 	int32_t mappingId = t.get<int32_t>("mappingId");
 	if (UniqueItemMappingIdsToIndices.count(mappingId) > 0) {
-		throw std::runtime_error(fmt::format("A unique item already exists for mapping ID {}.", mappingId));
+		app_fatal(fmt::format("A unique item already exists for mapping ID {}.", mappingId));
 	}
 
 	UniqueItem item;
