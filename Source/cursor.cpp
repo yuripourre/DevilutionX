@@ -33,6 +33,7 @@
 #include "headless_mode.hpp"
 #include "hwcursor.hpp"
 #include "inv.h"
+#include "items.h"
 #include "levels/trigs.h"
 #include "missiles.h"
 #include "options.h"
@@ -471,8 +472,8 @@ ClxSprite GetInvItemSprite(int cursId)
 	assert(cursId > 0);
 
 	const int iCurs = cursId - static_cast<int>(CURSOR_FIRSTITEM);
-	if (iCurs >= CustomCursorGraphicBase) {
-		const size_t customIdx = static_cast<size_t>(iCurs - CustomCursorGraphicBase);
+	if (iCurs >= ItemCAnimTblSize) {
+		const size_t customIdx = static_cast<size_t>(iCurs - ItemCAnimTblSize);
 		assert(customIdx < customCursorSprites.size());
 		return customCursorSprites[customIdx][0];
 	}
@@ -494,7 +495,7 @@ Size GetInvItemSize(int cursId)
 
 ClxSprite GetHalfSizeItemSprite(int cursId)
 {
-	if (cursId >= CustomCursorGraphicBase || static_cast<size_t>(cursId) >= numHalfSizeItemSprites || !HalfSizeItemSprites[cursId]) {
+	if (cursId >= ItemCAnimTblSize || static_cast<size_t>(cursId) >= numHalfSizeItemSprites || !HalfSizeItemSprites[cursId]) {
 		return GetInvItemSprite(static_cast<int>(CURSOR_FIRSTITEM) + cursId);
 	}
 	return (*HalfSizeItemSprites[cursId])[0];
@@ -502,7 +503,7 @@ ClxSprite GetHalfSizeItemSprite(int cursId)
 
 ClxSprite GetHalfSizeItemSpriteRed(int cursId)
 {
-	if (cursId >= CustomCursorGraphicBase || static_cast<size_t>(cursId) >= numHalfSizeItemSprites || !HalfSizeItemSpritesRed[cursId]) {
+	if (cursId >= ItemCAnimTblSize || static_cast<size_t>(cursId) >= numHalfSizeItemSprites || !HalfSizeItemSpritesRed[cursId]) {
 		return GetInvItemSprite(static_cast<int>(CURSOR_FIRSTITEM) + cursId);
 	}
 	return (*HalfSizeItemSpritesRed[cursId])[0];
@@ -572,7 +573,7 @@ void FreeHalfSizeItemSprites()
 
 int RegisterCustomCursorGraphic(OwnedClxSpriteList sprite)
 {
-	const int iCurs = CustomCursorGraphicBase + static_cast<int>(customCursorSprites.size());
+	const int iCurs = ItemCAnimTblSize + static_cast<int>(customCursorSprites.size());
 	customCursorSprites.push_back(std::move(sprite));
 	return iCurs;
 }

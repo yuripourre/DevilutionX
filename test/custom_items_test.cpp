@@ -121,15 +121,14 @@ TEST_F(CustomItemsTest, CustomItemInAllItemsList)
 	ItemMappingIdsToIndices.erase(99999);
 }
 
-TEST_F(CustomItemsTest, CustomCursorGraphicBase)
+TEST_F(CustomItemsTest, ItemCAnimTblSizeMatchesArray)
 {
-	// The base must be beyond the ItemCAnimTbl range
-	EXPECT_GE(CustomCursorGraphicBase, static_cast<int>(sizeof(ItemCAnimTbl)));
+	EXPECT_EQ(ItemCAnimTblSize, static_cast<int>(sizeof(ItemCAnimTbl)));
 }
 
 TEST_F(CustomItemsTest, SetCustomItemSounds)
 {
-	const int testCurs = CustomCursorGraphicBase;
+	const int testCurs = ItemCAnimTblSize;
 
 	// Register custom sounds
 	SetCustomItemSounds(testCurs, SfxID::ItemAxe, SfxID::ItemAxeFlip);
@@ -143,7 +142,7 @@ TEST_F(CustomItemsTest, SetCustomItemSounds)
 	EXPECT_EQ(GetItemDropSfx(item), SfxID::ItemAxeFlip);
 
 	// Clean up
-	FreeCustomDropAnims();
+	FreeCustomItemData();
 }
 
 } // namespace
