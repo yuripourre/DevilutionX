@@ -8,6 +8,7 @@
 
 #include "cursor.h"
 #include "data/file.hpp"
+#include "effects.h"
 #include "engine/load_cel.hpp"
 #include "items.h"
 #include "lua/metadoc.hpp"
@@ -542,6 +543,11 @@ int LuaRegisterCursorGraphic(const std::string &path, int width)
 	return RegisterCustomCursorGraphic(std::move(sprite));
 }
 
+void LuaRegisterItemSounds(int iCurs, int invSound, int dropSound)
+{
+	SetCustomItemSounds(iCurs, static_cast<SfxID>(invSound), static_cast<SfxID>(dropSound));
+}
+
 void LuaRegisterDropGraphic(int iCurs, const std::string &path, int numFrames)
 {
 	OwnedClxSpriteList sprites = LoadCel(path.c_str(), ItemAnimWidth);
@@ -572,6 +578,7 @@ sol::table LuaItemModule(sol::state_view &lua)
 	LuaSetDocFn(table, "addUniqueItem", "(item: table)", "Add a new unique item definition from a Lua table. Required: name, mappingId. Optional: cursorGraphic, uniqueBaseItem, minLevel, value, powers (array of {type, param1, param2}).", AddUniqueItem);
 	LuaSetDocFn(table, "registerCursorGraphic", "(path: string, width: number) -> number", "Load a sprite for inventory/cursor display and return its cursorGraphic ID.", LuaRegisterCursorGraphic);
 	LuaSetDocFn(table, "registerDropGraphic", "(cursorGraphic: number, path: string, numFrames: number)", "Load a floor drop animation sprite for a custom cursor graphic. If not called, uses the default for the item type.", LuaRegisterDropGraphic);
+	LuaSetDocFn(table, "registerItemSounds", "(cursorGraphic: number, invSound: number, dropSound: number)", "Register custom inventory and drop sounds for a cursor graphic. Use SfxID values from the audio module. Pass 0 to keep the default.", LuaRegisterItemSounds);
 
 	// Expose enums through the module table
 	table["ItemIndex"] = lua["ItemIndex"];

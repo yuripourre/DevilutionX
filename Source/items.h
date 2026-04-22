@@ -594,6 +594,9 @@ void SetCustomDropAnim(int iCurs, int dropAnimId);
 /** Frees all custom drop animations. */
 void FreeCustomDropAnims();
 
+/** Registers custom inventory and drop sounds for a cursor graphic ID. */
+void SetCustomItemSounds(int iCurs, SfxID invSound, SfxID dropSound);
+
 /** Returns the animation type index for an item, safe for custom cursor graphics. */
 int8_t GetItemAnimType(const Item &item);
 

@@ -188,6 +188,8 @@ struct CustomDropAnimData {
 
 std::vector<CustomDropAnimData> customDropAnims;
 ankerl::unordered_dense::map<int, int> customCursToDropAnim;
+ankerl::unordered_dense::map<int, SfxID> customInvSfx;
+ankerl::unordered_dense::map<int, SfxID> customDropSfx;
 
 enum class PlayerArmorGraphic : uint8_t {
 	// clang-format off
@@ -3856,6 +3858,16 @@ void FreeCustomDropAnims()
 {
 	customDropAnims.clear();
 	customCursToDropAnim.clear();
+	customInvSfx.clear();
+	customDropSfx.clear();
+}
+
+void SetCustomItemSounds(int iCurs, SfxID invSound, SfxID dropSound)
+{
+	if (invSound != SfxID::None)
+		customInvSfx[iCurs] = invSound;
+	if (dropSound != SfxID::None)
+		customDropSfx[iCurs] = dropSound;
 }
 
 int8_t GetItemAnimType(const Item &item)
@@ -3867,11 +3879,17 @@ int8_t GetItemAnimType(const Item &item)
 
 SfxID GetItemInvSfx(const Item &item)
 {
+	auto it = customInvSfx.find(item._iCurs);
+	if (it != customInvSfx.end())
+		return it->second;
 	return ItemInvSnds[GetItemAnimType(item)];
 }
 
 SfxID GetItemDropSfx(const Item &item)
 {
+	auto it = customDropSfx.find(item._iCurs);
+	if (it != customDropSfx.end())
+		return it->second;
 	return ItemDropSnds[GetItemAnimType(item)];
 }
 
