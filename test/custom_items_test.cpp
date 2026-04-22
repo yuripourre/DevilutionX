@@ -66,18 +66,18 @@ TEST_F(CustomItemsTest, GetItemAnimTypeOutOfBounds)
 	EXPECT_EQ(GetItemAnimType(item), DefaultDropAnimForItemType(ItemType::Bow));
 }
 
-TEST_F(CustomItemsTest, GetItemSfxBuiltinItems)
+TEST_F(CustomItemsTest, GetItemSndBuiltinItems)
 {
 	Item item = {};
 	item._iCurs = ICURS_SHORT_SWORD;
 	item._itype = ItemType::Sword;
 
-	SfxID invSfx = GetItemInvSfx(item);
-	SfxID dropSfx = GetItemDropSfx(item);
+	SfxID invSnd = GetItemInvSnd(item);
+	SfxID dropSnd = GetItemDropSnd(item);
 
 	// Should return a valid (non-None) sound
-	EXPECT_NE(invSfx, SfxID::None);
-	EXPECT_NE(dropSfx, SfxID::None);
+	EXPECT_NE(invSnd, SfxID::None);
+	EXPECT_NE(dropSnd, SfxID::None);
 }
 
 TEST_F(CustomItemsTest, CustomItemInAllItemsList)
@@ -140,8 +140,8 @@ TEST_F(CustomItemsTest, SetCustomItemSounds)
 	item._itype = ItemType::Sword; // Intentionally different from axe
 
 	// Should return the custom sounds, not the sword default
-	EXPECT_EQ(GetItemInvSfx(item), SfxID::ItemAxe);
-	EXPECT_EQ(GetItemDropSfx(item), SfxID::ItemAxeFlip);
+	EXPECT_EQ(GetItemInvSnd(item), SfxID::ItemAxe);
+	EXPECT_EQ(GetItemDropSnd(item), SfxID::ItemAxeFlip);
 
 	// Clean up
 	FreeCustomItemData();

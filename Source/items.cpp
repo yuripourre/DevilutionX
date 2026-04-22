@@ -189,8 +189,8 @@ struct CustomDropAnimData {
 
 std::vector<CustomDropAnimData> customDropAnims;
 ankerl::unordered_dense::map<int, int> customCursToDropAnim;
-ankerl::unordered_dense::map<int, SfxID> customInvSfx;
-ankerl::unordered_dense::map<int, SfxID> customDropSfx;
+ankerl::unordered_dense::map<int, SfxID> customInvSnd;
+ankerl::unordered_dense::map<int, SfxID> customDropSnd;
 
 enum class PlayerArmorGraphic : uint8_t {
 	// clang-format off
@@ -3767,7 +3767,7 @@ void RespawnItem(Item &item, bool flipFlag)
 		} else {
 			item.selectionRegion = SelectionRegion::Bottom; // Item is selectable at floor level and renders at floor level
 		}
-		PlaySfxLoc(GetItemDropSfx(item), item.position); // Play the drop sound (this item is perpetually in a dropping state, but can always be picked up)
+		PlaySfxLoc(GetItemDropSnd(item), item.position); // Play the drop sound (this item is perpetually in a dropping state, but can always be picked up)
 		break;
 	}
 }
@@ -3803,7 +3803,7 @@ void ProcessItems()
 				item.AnimInfo.currentFrame = 10;                                                     // Beginning of elevated frames
 		} else {
 			if (item.AnimInfo.currentFrame == (item.AnimInfo.numberOfFrames - 1) / 2)
-				PlaySfxLoc(GetItemDropSfx(item), item.position);
+				PlaySfxLoc(GetItemDropSnd(item), item.position);
 
 			if (item.AnimInfo.isLastFrame()) {
 				item.AnimInfo.currentFrame = item.AnimInfo.numberOfFrames - 1;
@@ -3825,10 +3825,10 @@ void FreeItemGFX()
 int8_t DefaultDropAnimForItemType(ItemType type)
 {
 	switch (type) {
-	case ItemType::Sword: return 8;       // swrdflip
 	case ItemType::Axe: return 1;         // axe
 	case ItemType::Bow: return 3;         // bow
 	case ItemType::Mace: return 6;        // mace
+	case ItemType::Sword: return 8;       // swrdflip
 	case ItemType::Shield: return 7;      // shield
 	case ItemType::LightArmor: return 14; // larmor
 	case ItemType::Helm: return 5;        // helmut
@@ -3859,16 +3859,16 @@ void FreeCustomItemData()
 {
 	customDropAnims.clear();
 	customCursToDropAnim.clear();
-	customInvSfx.clear();
-	customDropSfx.clear();
+	customInvSnd.clear();
+	customDropSnd.clear();
 }
 
 void SetCustomItemSounds(int iCurs, SfxID invSound, SfxID dropSound)
 {
 	if (invSound != SfxID::None)
-		customInvSfx[iCurs] = invSound;
+		customInvSnd[iCurs] = invSound;
 	if (dropSound != SfxID::None)
-		customDropSfx[iCurs] = dropSound;
+		customDropSnd[iCurs] = dropSound;
 }
 
 int8_t GetItemAnimType(const Item &item)
@@ -3878,18 +3878,18 @@ int8_t GetItemAnimType(const Item &item)
 	return ItemCAnimTbl[item._iCurs];
 }
 
-SfxID GetItemInvSfx(const Item &item)
+SfxID GetItemInvSnd(const Item &item)
 {
-	auto it = customInvSfx.find(item._iCurs);
-	if (it != customInvSfx.end())
+	auto it = customInvSnd.find(item._iCurs);
+	if (it != customInvSnd.end())
 		return it->second;
 	return ItemInvSnds[GetItemAnimType(item)];
 }
 
-SfxID GetItemDropSfx(const Item &item)
+SfxID GetItemDropSnd(const Item &item)
 {
-	auto it = customDropSfx.find(item._iCurs);
-	if (it != customDropSfx.end())
+	auto it = customDropSnd.find(item._iCurs);
+	if (it != customDropSnd.end())
 		return it->second;
 	return ItemDropSnds[GetItemAnimType(item)];
 }
