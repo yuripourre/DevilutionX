@@ -2533,10 +2533,8 @@ tl::expected<void, std::string> LoadGame(bool firstflag)
 
 	// Restore current town from player save data
 	std::string townId = GetTownRegistry().GetTownBySaveId(myPlayer._pCurrentTownId);
-	if (GetTownRegistry().HasTown(townId)) {
-		GetTownRegistry().SetCurrentTown(townId);
-	} else {
-		GetTownRegistry().SetCurrentTown(TristramTownId);
+	GetTownRegistry().SetCurrentTown(townId);
+	if (myPlayer._pCurrentTownId != 0 && townId == TristramTownId) {
 		myPlayer._pCurrentTownId = 0;
 	}
 
