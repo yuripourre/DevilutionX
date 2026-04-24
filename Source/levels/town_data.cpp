@@ -105,10 +105,16 @@ Point GetPortalTownPosition(size_t portalIndex)
 
 Point TownConfig::GetEntryPoint(lvl_entry entry, int warpFrom) const
 {
-	// For ENTRY_TWARPUP, match both entry type and warpFromLevel
+	// For ENTRY_TWARPUP, first try an exact warpFromLevel match.
+	// If none exists, fall back to a wildcard entry (-1 means "any").
 	if (entry == ENTRY_TWARPUP) {
 		for (const auto &ep : entries) {
 			if (ep.entryType == entry && ep.warpFromLevel == warpFrom) {
+				return ep.viewPosition;
+			}
+		}
+		for (const auto &ep : entries) {
+			if (ep.entryType == entry && ep.warpFromLevel == -1) {
 				return ep.viewPosition;
 			}
 		}
