@@ -55,8 +55,11 @@ std::string LuaRegisterTown(std::string_view townId, const sol::table &config)
 			townConfig.visualAssets.solPath = *v;
 		if (sol::optional<std::string> v = t["palette"])
 			townConfig.visualAssets.palettePath = *v;
-		if (sol::optional<int> v = t["microTileLen"])
+		if (sol::optional<int> v = t["microTileLen"]) {
+			if (*v < 1 || *v > 16)
+				return "Invalid town config for '" + std::string(townId) + "': assets.microTileLen must be between 1 and 16";
 			townConfig.visualAssets.microTileLen = static_cast<uint_fast8_t>(*v);
+		}
 	}
 
 	if (sol::optional<sol::table> bounds = config["bounds"]) {
