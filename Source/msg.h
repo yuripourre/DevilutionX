@@ -373,7 +373,7 @@ enum _cmd_id : uint8_t {
 	CMD_RETOWN,
 	// Travel to a different town (multi-town system).
 	//
-	// body (TCmdString): townId (null-terminated string, max 32 chars)
+	// body (TCmdString): townId (null-terminated string, max MAX_SEND_STR_LEN - 1 chars)
 	CMD_TOWNTRAVEL,
 	// Cast spell with direction at target location (e.g. firewall).
 	//
