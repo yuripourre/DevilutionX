@@ -604,12 +604,13 @@ void ProgressEventHandler(const SDL_Event &event, uint16_t modState)
 void QueueTownSwitch()
 {
 	if (MyPlayer != nullptr) {
-		MyPlayer->_pInvincible = true;
 		SDL_Event event;
 		CustomEventToSdlEvent(event, WM_DIABTOWNSWITCH);
 		if (!SDLC_PushEvent(&event)) {
 			LogError("QueueTownSwitch: {}", SDL_GetError());
 			SDL_ClearError();
+		} else {
+			MyPlayer->_pInvincible = true;
 		}
 	}
 }
