@@ -41,6 +41,17 @@ void TownRegistry::RegisterTown(const std::string &id, const TownConfig &config)
 {
 	if (HasTown(id))
 		LogWarn("RegisterTown: overwriting existing town '{}'", id);
+
+	for (const auto &[existingId, existingConfig] : towns) {
+		if (existingId != id && existingConfig.saveId == config.saveId) {
+			LogWarn(
+			    "RegisterTown: rejecting town '{}' with duplicate saveId '{}' already used by '{}'",
+			    id,
+			    config.saveId,
+			    existingId);
+			return;
+		}
+	}
 	towns[id] = config;
 	LogInfo("Registered town: {}", id);
 }
