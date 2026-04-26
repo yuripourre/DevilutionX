@@ -613,8 +613,8 @@ SfxID GetItemDropSnd(const Item &item);
 
 extern int MaxGold;
 
-extern int8_t ItemCAnimTbl[];
-extern const int ItemCAnimTblSize;
+extern DVL_API_FOR_TEST int8_t ItemCAnimTbl[];
+extern DVL_API_FOR_TEST const int ItemCAnimTblSize;
 extern SfxID ItemInvSnds[];
 
 } // namespace devilution
