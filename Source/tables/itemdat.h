@@ -650,7 +650,7 @@ struct UniqueItem {
 };
 
 extern DVL_API_FOR_TEST std::vector<ItemData> AllItemsList;
-extern ankerl::unordered_dense::map<int32_t, int16_t> ItemMappingIdsToIndices;
+extern DVL_API_FOR_TEST ankerl::unordered_dense::map<int32_t, int16_t> ItemMappingIdsToIndices;
 extern std::vector<PLStruct> ItemPrefixes;
 extern std::vector<PLStruct> ItemSuffixes;
 extern DVL_API_FOR_TEST std::vector<UniqueItem> UniqueItems;
