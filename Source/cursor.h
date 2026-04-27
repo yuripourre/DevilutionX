@@ -74,7 +74,7 @@ void DrawSoftwareCursor(const Surface &out, Point position, int cursId);
 
 void DrawItem(const Item &item, const Surface &out, Point position, ClxSprite clx);
 
-/** Returns the sprite for the given inventory index. */
+/** Returns the sprite for the given inventory index. Missing custom cursors fall back to the first vanilla item graphic. */
 ClxSprite GetInvItemSprite(int cursId);
 
 ClxSprite GetHalfSizeItemSprite(int cursId);
