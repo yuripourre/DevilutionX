@@ -129,7 +129,7 @@ int8_t ItemCAnimTbl[] = {
 	3, 1, 6, 6, 6, 1, 8, 6, 11, 3,
 	6, 8, 1, 6, 6, 17, 40, 0, 0, 0, 0
 };
-const int ItemCAnimTblSize = static_cast<int>(sizeof(ItemCAnimTbl));
+const int ItemCAnimTblSize = static_cast<int>(sizeof(ItemCAnimTbl) / sizeof(ItemCAnimTbl[0]));
 
 /** Maps of drop sounds effect of placing the item in the inventory. */
 SfxID ItemInvSnds[] = {
@@ -3177,7 +3177,7 @@ void GetItemAttrs(Item &item, _item_indexes itemData, int lvl)
 	if (item._itype != ItemType::Gold)
 		return;
 
-	int rndv;
+	int rndv = 0;
 	const int itemlevel = ItemsGetCurrlevel();
 	switch (sgGameInitInfo.nDifficulty) {
 	case DIFF_NORMAL:
