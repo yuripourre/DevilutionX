@@ -20,12 +20,28 @@ public:
 
 	static void SetUpTestSuite()
 	{
+		savedGbIsHellfire = gbIsHellfire;
+		savedGbIsSpawn = gbIsSpawn;
+		savedGbIsMultiplayer = gbIsMultiplayer;
+
 		LoadItemData();
 		LoadSpellData();
 		gbIsHellfire = true;
 		gbIsSpawn = false;
 		gbIsMultiplayer = false;
 	}
+
+	static void TearDownTestSuite()
+	{
+		gbIsHellfire = savedGbIsHellfire;
+		gbIsSpawn = savedGbIsSpawn;
+		gbIsMultiplayer = savedGbIsMultiplayer;
+	}
+
+private:
+	static inline bool savedGbIsHellfire = false;
+	static inline bool savedGbIsSpawn = false;
+	static inline bool savedGbIsMultiplayer = false;
 };
 
 TEST_F(CustomItemsTest, DefaultDropAnimForItemType)
