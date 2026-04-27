@@ -13,6 +13,7 @@
 #include "items.h"
 #include "lua/metadoc.hpp"
 #include "player.h"
+#include "sound_effect_enums.h"
 #include "tables/itemdat.h"
 #include "utils/utf8.hpp"
 
@@ -543,9 +544,16 @@ int LuaRegisterCursorGraphic(const std::string &path, int width)
 	return RegisterCustomCursorGraphic(std::move(sprite));
 }
 
-void LuaRegisterItemSounds(int iCurs, int invSound, int dropSound)
+[[nodiscard]] SfxID LuaItemSoundArgToSfxId(sol::optional<int> raw)
 {
-	SetCustomItemSounds(iCurs, static_cast<SfxID>(invSound), static_cast<SfxID>(dropSound));
+	if (!raw.has_value() || *raw == static_cast<int>(SfxID::None))
+		return SfxID::None;
+	return static_cast<SfxID>(static_cast<int16_t>(*raw));
+}
+
+void LuaRegisterItemSounds(int iCurs, sol::optional<int> invSound, sol::optional<int> dropSound)
+{
+	SetCustomItemSounds(iCurs, LuaItemSoundArgToSfxId(invSound), LuaItemSoundArgToSfxId(dropSound));
 }
 
 void LuaRegisterDropGraphic(int iCurs, const std::string &path, int numFrames)
@@ -578,7 +586,7 @@ sol::table LuaItemModule(sol::state_view &lua)
 	LuaSetDocFn(table, "addUniqueItem", "(item: table)", "Add a new unique item definition from a Lua table. Required: name, mappingId. Optional: cursorGraphic, uniqueBaseItem, minLevel, value, powers (array of {type, param1, param2}).", AddUniqueItem);
 	LuaSetDocFn(table, "registerCursorGraphic", "(path: string, width: number) -> number", "Load a sprite for inventory/cursor display and return its cursorGraphic ID.", LuaRegisterCursorGraphic);
 	LuaSetDocFn(table, "registerDropGraphic", "(cursorGraphic: number, path: string, numFrames: number)", "Load a floor drop animation sprite for a custom cursor graphic. If not called, uses the default for the item type.", LuaRegisterDropGraphic);
-	LuaSetDocFn(table, "registerItemSounds", "(cursorGraphic: number, invSound: number, dropSound: number)", "Register custom inventory and drop sounds for a cursor graphic. Use SfxID values from the audio module. Pass 0 to keep the default.", LuaRegisterItemSounds);
+	LuaSetDocFn(table, "registerItemSounds", "(cursorGraphic: number, invSound: number|nil, dropSound: number|nil)", "Register custom inventory and drop sounds for a cursor graphic. Use SfxID values from the audio module (e.g. SfxID.ItemRingFlip). For each slot, pass nil or SfxID.None (-1) to keep the default.", LuaRegisterItemSounds);
 
 	// Expose enums through the module table
 	table["ItemIndex"] = lua["ItemIndex"];

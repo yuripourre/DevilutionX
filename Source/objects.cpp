@@ -1984,7 +1984,7 @@ void OperateChamberOfBoneBook(Object &questBook, bool sendmsg)
 		Quests[Q_SCHAMB]._qlog = true;
 	}
 
-	_speech_id textdef;
+	_speech_id textdef = TEXT_NONE;
 	switch (MyPlayer->_pClass) {
 	case HeroClass::Warrior:
 		textdef = TEXT_BONER;
@@ -3855,7 +3855,7 @@ void InitObjects()
 			AddL2Objs(0, 0, MAXDUNX, MAXDUNY);
 			AddL2Torches();
 			if (Quests[Q_BLIND].IsAvailable()) {
-				_speech_id spId;
+				_speech_id spId = TEXT_NONE;
 				switch (MyPlayer->_pClass) {
 				case HeroClass::Warrior:
 					spId = TEXT_BLINDING;
@@ -3883,7 +3883,7 @@ void InitObjects()
 				LoadMapObjects("levels\\l2data\\blind2.dun", SetPiece.position.megaToWorld());
 			}
 			if (Quests[Q_BLOOD].IsAvailable()) {
-				_speech_id spId;
+				_speech_id spId = TEXT_NONE;
 				switch (MyPlayer->_pClass) {
 				case HeroClass::Warrior:
 					spId = TEXT_BLOODY;
@@ -3918,7 +3918,7 @@ void InitObjects()
 		}
 		if (leveltype == DTYPE_HELL) {
 			if (Quests[Q_WARLORD].IsAvailable()) {
-				_speech_id spId;
+				_speech_id spId = TEXT_NONE;
 				switch (MyPlayer->_pClass) {
 				case HeroClass::Warrior:
 					spId = TEXT_BLOODWAR;
