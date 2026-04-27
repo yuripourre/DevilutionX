@@ -3843,10 +3843,24 @@ int8_t DefaultDropAnimForItemType(ItemType type)
 	}
 }
 
-int RegisterCustomDropAnim(OwnedClxSpriteList sprites, int8_t numFrames)
+int RegisterCustomDropAnim(OwnedClxSpriteList sprites, int numFrames)
 {
+	const uint32_t numSprites = sprites.numSprites();
+	if (numSprites == 0) {
+		app_fatal("Cannot register custom drop animation: sprite has no frames.");
+	}
+	if (numFrames < 1 || numFrames > INT8_MAX) {
+		app_fatal(fmt::format(
+		    "Cannot register custom drop animation: numFrames {} is out of range (1..{}, AnimationInfo uses int8_t).",
+		    numFrames, INT8_MAX));
+	}
+	if (static_cast<uint32_t>(numFrames) > numSprites) {
+		app_fatal(fmt::format(
+		    "Cannot register custom drop animation: numFrames {} exceeds loaded sprite frame count {}.",
+		    numFrames, numSprites));
+	}
 	const int id = static_cast<int>(customDropAnims.size());
-	customDropAnims.push_back({ std::move(sprites), numFrames });
+	customDropAnims.push_back({ std::move(sprites), static_cast<int8_t>(numFrames) });
 	return id;
 }
 

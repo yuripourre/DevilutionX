@@ -86,7 +86,8 @@ void FreeHalfSizeItemSprites();
 Size GetInvItemSize(int cursId);
 
 /** Registers a custom cursor sprite and returns the _iCurs value to use.
- * Custom IDs start at ItemCAnimTblSize (the number of entries in ItemCAnimTbl). */
+ * Custom IDs start at ItemCAnimTblSize (the number of entries in ItemCAnimTbl).
+ * Fails if the id would exceed uint8_t (same storage as Item::_iCurs). */
 int RegisterCustomCursorGraphic(OwnedClxSpriteList sprite);
 
 /** Frees all custom cursor sprites. */

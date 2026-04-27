@@ -559,7 +559,7 @@ void LuaRegisterItemSounds(int iCurs, sol::optional<int> invSound, sol::optional
 void LuaRegisterDropGraphic(int iCurs, const std::string &path, int numFrames)
 {
 	OwnedClxSpriteList sprites = LoadCel(path.c_str(), ItemAnimWidth);
-	const int dropAnimId = RegisterCustomDropAnim(std::move(sprites), static_cast<int8_t>(numFrames));
+	const int dropAnimId = RegisterCustomDropAnim(std::move(sprites), numFrames);
 	SetCustomDropAnim(iCurs, dropAnimId);
 }
 
