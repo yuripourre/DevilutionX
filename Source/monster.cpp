@@ -44,6 +44,7 @@
 #include "engine/clx_sprite.hpp"
 #include "engine/direction.hpp"
 #include "engine/lighting_defs.hpp"
+#include "engine/load_cel.hpp"
 #include "engine/load_cl2.hpp"
 #include "engine/load_file.hpp"
 #include "engine/path.h"
@@ -1509,13 +1510,6 @@ void MonsterDeath(Monster &monster)
 	monster.isInvalid = true;
 
 	M_UpdateRelations(monster);
-}
-
-void LuaInvalidateMonster(Monster &monster)
-{
-	dMonster[monster.position.tile.x][monster.position.tile.y] = 0;
-	MarkWalkabilityChanged();
-	monster.isInvalid = true;
 }
 
 bool MonsterSpecialStand(Monster &monster)
@@ -3278,6 +3272,21 @@ bool PosOkMovingMissile(Point position)
 }
 
 } // namespace
+
+void LuaInvalidateMonster(Monster &monster)
+{
+	dMonster[monster.position.tile.x][monster.position.tile.y] = 0;
+	MarkWalkabilityChanged();
+	monster.isInvalid = true;
+}
+
+void LuaReplaceMonsterWithWoundedTowner(Monster &monster)
+{
+	static OwnedClxSpriteList deadguySprite = LoadCel("towners\\butch\\deadguy", 96);
+	monster.animInfo.changeAnimationData(ClxSpriteList(deadguySprite), 1, 1);
+	monster.animInfo.currentFrame = 0;
+	monster.animInfo.isPetrified = true;
+}
 
 std::expected<size_t, std::string> AddMonsterType(_monster_id type, placeflag placeflag)
 {

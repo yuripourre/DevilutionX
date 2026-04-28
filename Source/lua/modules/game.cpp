@@ -29,16 +29,22 @@ sol::table LuaGameModule(sol::state_view &lua)
 	    "Returns true when running in a multiplayer session.",
 	    []() { return gbIsMultiplayer; });
 
-	LuaSetDocFn(table, "addBigExplosionAt", "(x: integer, y: integer)",
-	    "Spawns a BigExplosion missile at (x, y). Used e.g. for Diablo death. Visual only, no caster.",
+	LuaSetDocFn(table, "addResurrectBeamAt", "(x: integer, y: integer)",
+	    "Spawns a ResurrectBeam visual effect at (x, y). Visual only, no caster.",
 	    [](int x, int y) {
-		    LuaAddBigExplosionAt(x, y);
+		    LuaAddResurrectBeamAt(x, y);
 	    });
 
 	LuaSetDocFn(table, "invalidateMonster", "(monster: Monster)",
 	    "Removes the monster from the map and marks it invalid. Call when Lua handles death (e.g. no corpse).",
 	    [](const Monster &monster) {
 		    LuaInvalidateMonster(const_cast<Monster &>(monster));
+	    });
+
+	LuaSetDocFn(table, "replaceMonsterWithWoundedTowner", "(monster: Monster)",
+	    "Replaces the monster's sprite with the wounded towner (dead body graphic), frozen at frame 0.",
+	    [](const Monster &monster) {
+		    LuaReplaceMonsterWithWoundedTowner(const_cast<Monster &>(monster));
 	    });
 
 	// Named constants for quest IDs (values match the quest_id enum in tables/objdat.h).

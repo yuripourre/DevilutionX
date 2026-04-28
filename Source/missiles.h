@@ -490,6 +490,8 @@ void SetUpMissileAnimationData();
 void RedoMissileFlags();
 /** @brief For Lua: spawn BigExplosion at (x, y). No caster (visual only). */
 void LuaAddBigExplosionAt(int x, int y);
+/** @brief For Lua: spawn a ResurrectBeam visual effect at (x, y). No caster. */
+void LuaAddResurrectBeamAt(int x, int y);
 
 #ifdef BUILD_TESTING
 void TestRotateBlockedMissile(Missile &missile);
