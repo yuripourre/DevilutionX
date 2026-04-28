@@ -33,7 +33,7 @@ items.addItem({
 
 local soulstonItemIdx = items.getItemIndex(SOULSTONE_MAPPING_ID)
 
--- ─── Diablo death: explosion + soulstone + invalidate ────────────────────────
+-- ─── Diablo death: resurrect beam + soulstone drop + wounded towner ──────────
 
 -- C++ fires OnMonsterDeath (cancellable) at the last frame of the death animation.
 -- Returning true skips the default corpse/invalidate; we handle cleanup ourselves.
@@ -44,9 +44,9 @@ events.OnMonsterDeath.add(function(monster, deathFrame)
   end
 
   local pos = monster.position
-  game.addBigExplosionAt(pos.x, pos.y)
+  game.addResurrectBeamAt(pos.x, pos.y)
   items.spawnQuestItem(soulstonItemIdx, pos.x, pos.y, true)
-  game.invalidateMonster(monster)
+  game.replaceMonsterWithWoundedTowner(monster)
 
   local self = player.self()
   if self ~= nil then

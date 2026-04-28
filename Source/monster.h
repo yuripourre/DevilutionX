@@ -586,5 +586,7 @@ uint8_t encode_enemy(Monster &monster);
 void decode_enemy(Monster &monster, uint8_t enemyId);
 /** @brief For Lua: clear monster from map and mark invalid (call when Lua handles death). */
 void LuaInvalidateMonster(Monster &monster);
+/** @brief For Lua: replace monster's sprite with the wounded towner (dead body), frozen at frame 0. */
+void LuaReplaceMonsterWithWoundedTowner(Monster &monster);
 
 } // namespace devilution
