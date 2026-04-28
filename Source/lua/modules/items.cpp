@@ -6,7 +6,6 @@
 #include <sol/sol.hpp>
 
 #include "appfat.h"
-#include "cursor.h"
 #include "data/file.hpp"
 #include "effects.h"
 #include "engine/load_cel.hpp"
@@ -351,7 +350,6 @@ void RegisterItemIndexEnum(sol::state_view &lua)
 	        { "ShortBattleBow", IDI_SHORT_BATTLE_BOW },
 	        { "RuneOfStone", IDI_RUNEOFSTONE },
 	        { "SorcererDiablo", IDI_SORCERER_DIABLO },
-	        { "Soulstone", IDI_SOULSTONE },
 	        { "ArenaPotion", IDI_ARENAPOT },
 	        { "None", IDI_NONE },
 	    });
@@ -540,12 +538,6 @@ void AddUniqueItem(sol::table t)
 	UniqueItemMappingIdsToIndices.emplace(mappingId, static_cast<int32_t>(UniqueItems.size()) - 1);
 }
 
-int LuaRegisterCursorGraphic(const std::string &path, int width)
-{
-	OwnedClxSpriteList sprite = LoadCel(path.c_str(), static_cast<uint16_t>(width));
-	return RegisterCustomCursorGraphic(std::move(sprite));
-}
-
 [[nodiscard]] SfxID LuaItemSoundArgToSfxId(sol::optional<int> raw)
 {
 	if (!raw.has_value() || *raw == static_cast<int>(SfxID::None))
@@ -599,7 +591,6 @@ sol::table LuaItemModule(sol::state_view &lua)
 	LuaSetDocFn(table, "addUniqueItemDataFromTsv", "(path: string, baseMappingId: number)", AddUniqueItemDataFromTsv);
 	LuaSetDocFn(table, "addItem", "(item: table)", "Add a new item definition from a Lua table. Required: name, mappingId. Optional: dropRate, class, equipType, cursorGraphic, type, uniqueBaseItem, shortName, minMonsterLevel, durability, minDam, maxDam, minAC, maxAC, minStr, minMag, minDex, flags, miscId, spell, usable, value.", AddItem);
 	LuaSetDocFn(table, "addUniqueItem", "(item: table)", "Add a new unique item definition from a Lua table. Required: name, mappingId. Optional: cursorGraphic, uniqueBaseItem, minLevel, value, powers (array of {type, param1, param2}).", AddUniqueItem);
-	LuaSetDocFn(table, "registerCursorGraphic", "(path: string, width: number) -> number", "Load a sprite for inventory/cursor display and return its cursorGraphic ID.", LuaRegisterCursorGraphic);
 	LuaSetDocFn(table, "registerDropGraphic", "(cursorGraphic: number, path: string, numFrames: number)", "Load a floor drop animation sprite for a custom cursor graphic. If not called, uses the default for the item type.", LuaRegisterDropGraphic);
 	LuaSetDocFn(table, "registerItemSounds", "(cursorGraphic: number, invSound: number|nil, dropSound: number|nil)", "Register custom inventory and drop sounds for a cursor graphic. Use SfxID values from the audio module (e.g. SfxID.ItemRingFlip). For each slot, pass nil or SfxID.None (-1) to keep the default.", LuaRegisterItemSounds);
 	LuaSetDocFn(table, "spawnQuestItem",

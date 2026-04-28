@@ -349,29 +349,6 @@ sol::table *GetLuaEvents()
 	return CurrentLuaState ? &CurrentLuaState->events : nullptr;
 }
 
-template <typename... Args>
-void CallLuaEventGlobal(std::string_view name, Args &&...args)
-{
-	if (!CurrentLuaState.has_value()) {
-		return;
-	}
-
-	const auto trigger = CurrentLuaState->events.traverse_get<std::optional<sol::object>>(name, "trigger");
-	if (!trigger.has_value() || !trigger->is<sol::protected_function>()) {
-		LogError("events.{}.trigger is not a function", name);
-		return;
-	}
-	const sol::protected_function fn = trigger->as<sol::protected_function>();
-	SafeCallResult(fn(std::forward<Args>(args)...), /*optional=*/true);
-}
-
-void LuaEvent(std::string_view name) { CallLuaEventGlobal(name); }
-void LuaEvent(std::string_view name, std::string_view arg) { CallLuaEventGlobal(name, arg); }
-void LuaEvent(std::string_view name, const Player *player, int arg1, int arg2) { CallLuaEventGlobal(name, player, arg1, arg2); }
-void LuaEvent(std::string_view name, const Monster *monster, int arg1, int arg2) { CallLuaEventGlobal(name, monster, arg1, arg2); }
-void LuaEvent(std::string_view name, const Monster *monster, int arg1) { CallLuaEventGlobal(name, monster, arg1); }
-void LuaEvent(std::string_view name, const Player *player, uint32_t arg1) { CallLuaEventGlobal(name, player, arg1); }
-
 bool LuaEventCancellable(std::string_view name, const Player *player, const Item *item)
 {
 	if (!CurrentLuaState.has_value()) {
