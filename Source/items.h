@@ -585,8 +585,8 @@ bool ApplyOilToItem(Item &item, Player &player);
  */
 void UpdateHellfireFlag(Item &item, const char *identifiedItemName);
 
-/** Registers a custom floor drop animation and returns its ID. */
-int RegisterCustomDropAnim(OwnedClxSpriteList sprites, int8_t numFrames);
+/** Registers a custom floor drop animation and returns its ID. numFrames must be 1..127 (int8_t) and not exceed the sprite's frame count. */
+int RegisterCustomDropAnim(OwnedClxSpriteList sprites, int numFrames);
 
 /** Associates a custom cursor graphic ID with a custom drop animation ID. */
 void SetCustomDropAnim(int iCurs, int dropAnimId);

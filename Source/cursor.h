@@ -74,7 +74,7 @@ void DrawSoftwareCursor(const Surface &out, Point position, int cursId);
 
 void DrawItem(const Item &item, const Surface &out, Point position, ClxSprite clx);
 
-/** Returns the sprite for the given inventory index. */
+/** Returns the sprite for the given inventory index. Missing custom cursors fall back to the first vanilla item graphic. */
 ClxSprite GetInvItemSprite(int cursId);
 
 ClxSprite GetHalfSizeItemSprite(int cursId);
@@ -86,7 +86,8 @@ void FreeHalfSizeItemSprites();
 Size GetInvItemSize(int cursId);
 
 /** Registers a custom cursor sprite and returns the _iCurs value to use.
- * Custom IDs start at ItemCAnimTblSize (the number of entries in ItemCAnimTbl). */
+ * Custom IDs start at ItemCAnimTblSize (the number of entries in ItemCAnimTbl).
+ * Fails if the id would exceed uint8_t (same storage as Item::_iCurs). */
 int RegisterCustomCursorGraphic(OwnedClxSpriteList sprite);
 
 /** Frees all custom cursor sprites. */

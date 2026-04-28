@@ -129,7 +129,7 @@ int8_t ItemCAnimTbl[] = {
 	3, 1, 6, 6, 6, 1, 8, 6, 11, 3,
 	6, 8, 1, 6, 6, 17, 40, 0, 0, 0, 0
 };
-const int ItemCAnimTblSize = static_cast<int>(sizeof(ItemCAnimTbl));
+const int ItemCAnimTblSize = static_cast<int>(sizeof(ItemCAnimTbl) / sizeof(ItemCAnimTbl[0]));
 
 /** Maps of drop sounds effect of placing the item in the inventory. */
 SfxID ItemInvSnds[] = {
@@ -191,6 +191,17 @@ std::vector<CustomDropAnimData> customDropAnims;
 ankerl::unordered_dense::map<int, int> customCursToDropAnim;
 ankerl::unordered_dense::map<int, SfxID> customInvSnd;
 ankerl::unordered_dense::map<int, SfxID> customDropSnd;
+
+const CustomDropAnimData *GetCustomDropAnimData(int iCurs)
+{
+	const auto dropIt = customCursToDropAnim.find(iCurs);
+	if (dropIt == customCursToDropAnim.end() || dropIt->second < 0)
+		return nullptr;
+	const size_t dropAnimIndex = static_cast<size_t>(dropIt->second);
+	if (dropAnimIndex >= customDropAnims.size())
+		return nullptr;
+	return &customDropAnims[dropAnimIndex];
+}
 
 enum class PlayerArmorGraphic : uint8_t {
 	// clang-format off
@@ -3177,7 +3188,7 @@ void GetItemAttrs(Item &item, _item_indexes itemData, int lvl)
 	if (item._itype != ItemType::Gold)
 		return;
 
-	int rndv;
+	int rndv = 0;
 	const int itemlevel = ItemsGetCurrlevel();
 	switch (sgGameInitInfo.nDifficulty) {
 	case DIFF_NORMAL:
@@ -3843,10 +3854,24 @@ int8_t DefaultDropAnimForItemType(ItemType type)
 	}
 }
 
-int RegisterCustomDropAnim(OwnedClxSpriteList sprites, int8_t numFrames)
+int RegisterCustomDropAnim(OwnedClxSpriteList sprites, int numFrames)
 {
+	const uint32_t numSprites = sprites.numSprites();
+	if (numSprites == 0) {
+		app_fatal("Cannot register custom drop animation: sprite has no frames.");
+	}
+	if (numFrames < 1 || numFrames > INT8_MAX) {
+		app_fatal(fmt::format(
+		    "Cannot register custom drop animation: numFrames {} is out of range (1..{}, AnimationInfo uses int8_t).",
+		    numFrames, INT8_MAX));
+	}
+	if (static_cast<uint32_t>(numFrames) > numSprites) {
+		app_fatal(fmt::format(
+		    "Cannot register custom drop animation: numFrames {} exceeds loaded sprite frame count {}.",
+		    numFrames, numSprites));
+	}
 	const int id = static_cast<int>(customDropAnims.size());
-	customDropAnims.push_back({ std::move(sprites), numFrames });
+	customDropAnims.push_back({ std::move(sprites), static_cast<int8_t>(numFrames) });
 	return id;
 }
 
@@ -3896,10 +3921,9 @@ SfxID GetItemDropSnd(const Item &item)
 
 void GetItemFrm(Item &item)
 {
-	auto dropIt = customCursToDropAnim.find(item._iCurs);
-	if (dropIt != customCursToDropAnim.end() && dropIt->second >= 0
-	    && static_cast<size_t>(dropIt->second) < customDropAnims.size()) {
-		item.AnimInfo.sprites.emplace(customDropAnims[static_cast<size_t>(dropIt->second)].sprites);
+	const CustomDropAnimData *customDropAnim = GetCustomDropAnimData(item._iCurs);
+	if (customDropAnim != nullptr) {
+		item.AnimInfo.sprites.emplace(customDropAnim->sprites);
 		return;
 	}
 	const int it = GetItemAnimType(item);
@@ -4897,12 +4921,10 @@ void Item::setNewAnimation(bool showAnimation)
 	int8_t numberOfFrames;
 	OptionalClxSpriteList sprite;
 
-	auto dropIt = customCursToDropAnim.find(_iCurs);
-	if (dropIt != customCursToDropAnim.end() && dropIt->second >= 0
-	    && static_cast<size_t>(dropIt->second) < customDropAnims.size()) {
-		auto &dropAnim = customDropAnims[static_cast<size_t>(dropIt->second)];
-		numberOfFrames = dropAnim.numFrames;
-		sprite = OptionalClxSpriteList { dropAnim.sprites };
+	const CustomDropAnimData *customDropAnim = GetCustomDropAnimData(_iCurs);
+	if (customDropAnim != nullptr) {
+		numberOfFrames = customDropAnim->numFrames;
+		sprite = OptionalClxSpriteList { customDropAnim->sprites };
 	} else {
 		const int8_t it = GetItemAnimType(*this);
 		numberOfFrames = ItemAnimLs[it];

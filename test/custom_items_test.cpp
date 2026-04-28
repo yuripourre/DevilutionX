@@ -20,12 +20,28 @@ public:
 
 	static void SetUpTestSuite()
 	{
+		savedGbIsHellfire = gbIsHellfire;
+		savedGbIsSpawn = gbIsSpawn;
+		savedGbIsMultiplayer = gbIsMultiplayer;
+
 		LoadItemData();
 		LoadSpellData();
 		gbIsHellfire = true;
 		gbIsSpawn = false;
 		gbIsMultiplayer = false;
 	}
+
+	static void TearDownTestSuite()
+	{
+		gbIsHellfire = savedGbIsHellfire;
+		gbIsSpawn = savedGbIsSpawn;
+		gbIsMultiplayer = savedGbIsMultiplayer;
+	}
+
+private:
+	static inline bool savedGbIsHellfire = false;
+	static inline bool savedGbIsSpawn = false;
+	static inline bool savedGbIsMultiplayer = false;
 };
 
 TEST_F(CustomItemsTest, DefaultDropAnimForItemType)
@@ -56,9 +72,13 @@ TEST_F(CustomItemsTest, GetItemAnimTypeBuiltinItems)
 
 TEST_F(CustomItemsTest, GetItemAnimTypeOutOfBounds)
 {
-	// Cursor IDs beyond ItemCAnimTbl should fall back to item type default
+	// Cursor IDs beyond ItemCAnimTbl should fall back to item type default.
+	// Derive from ItemCAnimTblSize so growth does not make the cursor in-bounds again; _iCurs is uint8_t.
+	const uint8_t oobCurs = static_cast<uint8_t>(
+	    (ItemCAnimTblSize < 255) ? (ItemCAnimTblSize + 1) : 255);
+	ASSERT_GE(static_cast<int>(oobCurs), ItemCAnimTblSize);
 	Item item = {};
-	item._iCurs = 250; // Well beyond the table
+	item._iCurs = oobCurs;
 	item._itype = ItemType::Sword;
 	EXPECT_EQ(GetItemAnimType(item), DefaultDropAnimForItemType(ItemType::Sword));
 

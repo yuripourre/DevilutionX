@@ -471,8 +471,13 @@ ClxSprite GetInvItemSprite(int cursId)
 	const int iCurs = cursId - static_cast<int>(CURSOR_FIRSTITEM);
 	if (iCurs >= ItemCAnimTblSize) {
 		const size_t customIdx = static_cast<size_t>(iCurs - ItemCAnimTblSize);
-		assert(customIdx < customCursorSprites.size());
-		return customCursorSprites[customIdx][0];
+		if (customIdx < customCursorSprites.size() && customCursorSprites[customIdx].numSprites() > 0) {
+			return customCursorSprites[customIdx][0];
+		}
+		// Save or mod references a custom cursor that is not registered (e.g. mod unloaded).
+		constexpr int fallbackInvItemCursorId = static_cast<int>(CURSOR_FIRSTITEM);
+		assert(fallbackInvItemCursorId > 0);
+		return GetInvItemSprite(fallbackInvItemCursorId);
 	}
 
 	const size_t numSprites = pCursCels->numSprites();
@@ -570,7 +575,13 @@ void FreeHalfSizeItemSprites()
 
 int RegisterCustomCursorGraphic(OwnedClxSpriteList sprite)
 {
+	constexpr int maxItemCursorUint8 = std::numeric_limits<uint8_t>::max();
 	const int iCurs = ItemCAnimTblSize + static_cast<int>(customCursorSprites.size());
+	if (iCurs > maxItemCursorUint8) {
+		app_fatal(fmt::format(
+		    "Cannot register custom cursor graphic: cursor id {} would exceed Item._iCurs limit (0..{}, ItemCAnimTblSize is {}).",
+		    iCurs, maxItemCursorUint8, ItemCAnimTblSize));
+	}
 	customCursorSprites.push_back(std::move(sprite));
 	return iCurs;
 }
