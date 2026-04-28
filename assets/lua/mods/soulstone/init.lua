@@ -16,22 +16,30 @@ local game     = require("devilutionx.game")
 
 local SOULSTONE_MAPPING_ID = 10001
 -- Frame 36 of objcurs.cel (the bloodstone graphic) is reused as the soulstone cursor.
-local SOULSTONE_CURSOR = 36
+local SOULSTONE_CURSOR = 25
 
-items.addItem({
-  mappingId     = SOULSTONE_MAPPING_ID,
-  name          = "Soulstone",
-  shortName     = "Soulstone",
-  type          = items.ItemType.Misc,
-  class         = items.ItemClass.Quest,
-  equipType     = items.ItemEquipType.Unequipable,
-  cursorGraphic = SOULSTONE_CURSOR,
-  usable        = true,
-  value         = 0,
-  dropRate      = 0,
-})
+local soulstoneItemIdx = nil
+local handledDiabloDeaths = {}
 
-local soulstonItemIdx = items.getItemIndex(SOULSTONE_MAPPING_ID)
+events.GameStart.add(function()
+  handledDiabloDeaths = {}
+end)
+
+events.ItemDataLoaded.add(function()
+  items.addItem({
+    mappingId     = SOULSTONE_MAPPING_ID,
+    name          = "Soulstone",
+    shortName     = "Soulstone",
+    type          = items.ItemType.Misc,
+    class         = items.ItemClass.Quest,
+    equipType     = items.ItemEquipType.Unequipable,
+    cursorGraphic = SOULSTONE_CURSOR,
+    usable        = true,
+    value         = 0,
+    dropRate      = 0,
+  })
+  soulstoneItemIdx = items.getItemIndex(SOULSTONE_MAPPING_ID)
+end)
 
 -- ─── Diablo death: resurrect beam + soulstone drop + wounded towner ──────────
 
@@ -42,10 +50,17 @@ events.OnMonsterDeath.add(function(monster, deathFrame)
   if monster.typeId ~= monsters.MonsterID.Diablo then
     return false
   end
+  if handledDiabloDeaths[monster.id] then
+    return true
+  end
+  handledDiabloDeaths[monster.id] = true
 
   local pos = monster.position
+  if soulstoneItemIdx == nil then
+    return false
+  end
   game.addResurrectBeamAt(pos.x, pos.y)
-  items.spawnQuestItem(soulstonItemIdx, pos.x, pos.y, true)
+  items.spawnQuestItem(soulstoneItemIdx, pos.x, pos.y, true)
   game.replaceMonsterWithWoundedTowner(monster)
 
   local self = player.self()

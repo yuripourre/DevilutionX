@@ -127,7 +127,7 @@ int8_t ItemCAnimTbl[] = {
 	36, 36, 37, 38, 38, 38, 38, 38, 41, 42,
 	8, 8, 8, 17, 0, 6, 8, 11, 11, 3,
 	3, 1, 6, 6, 6, 1, 8, 6, 11, 3,
-	6, 8, 1, 6, 6, 17, 40, 0, 0, 0, 0
+	6, 8, 1, 6, 6, 17, 40, 0, 0
 };
 const int ItemCAnimTblSize = static_cast<int>(sizeof(ItemCAnimTbl) / sizeof(ItemCAnimTbl[0]));
 
@@ -239,7 +239,6 @@ char OilNames[10][25] = {
 
 /** Map of item type .cel file names. */
 const char *const ItemDropNames[] = {
-	// Diablo
 	"armor2",
 	"axe",
 	"fbttle",
@@ -275,7 +274,6 @@ const char *const ItemDropNames[] = {
 	"bldstn",
 	"fanvil",
 	"flazstaf",
-	// Hellfire
 	"bombs1",
 	"halfps1",
 	"wholeps1",
@@ -284,13 +282,6 @@ const char *const ItemDropNames[] = {
 	"cows1",
 	"donkys1",
 	"mooses1",
-	// Unused (Diablo)
-	"axeflip",
-	"bottle",
-	"feye",
-	"fheart",
-	"manaflip",
-	"wand",
 };
 /** Maps of item drop animation length. */
 int8_t ItemAnimLs[] = {
@@ -1744,10 +1735,6 @@ void PrintItemOil(char iDidx)
 	case IMISC_FULLREJUV:
 		AddItemInfoBoxString(_("restore all life and mana"));
 		break;
-	case IMISC_SOULSTONE:
-		AddItemInfoBoxString(_("Contains Diablo's essence"));
-		AddItemInfoBoxString(_("Right-click to use"));
-		break;
 	case IMISC_ARENAPOT:
 		AddItemInfoBoxString(_("restore all life and mana"));
 		AddItemInfoBoxString(_("(works only in arenas)"));
@@ -3190,7 +3177,7 @@ void GetItemAttrs(Item &item, _item_indexes itemData, int lvl)
 	if (item._itype != ItemType::Gold)
 		return;
 
-	int rndv = 0;
+	int rndv;
 	const int itemlevel = ItemsGetCurrlevel();
 	switch (sgGameInitInfo.nDifficulty) {
 	case DIFF_NORMAL:

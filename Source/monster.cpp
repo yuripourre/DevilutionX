@@ -1498,15 +1498,16 @@ void MonsterDeath(Monster &monster)
 		return;
 	}
 	if (LuaEventCancellable("OnMonsterDeath", &monster, monster.animInfo.currentFrame)) {
+		M_UpdateRelations(monster);
 		return;
 	}
+	dMonster[monster.position.tile.x][monster.position.tile.y] = 0;
+	MarkWalkabilityChanged();
 	if (monster.isUnique())
 		AddCorpse(monster.position.tile, monster.corpseId, monster.direction);
 	else
 		AddCorpse(monster.position.tile, monster.type().corpseId, monster.direction);
 
-	dMonster[monster.position.tile.x][monster.position.tile.y] = 0;
-	MarkWalkabilityChanged();
 	monster.isInvalid = true;
 
 	M_UpdateRelations(monster);
@@ -3286,6 +3287,7 @@ void LuaReplaceMonsterWithWoundedTowner(Monster &monster)
 	monster.animInfo.changeAnimationData(ClxSpriteList(deadguySprite), 1, 1);
 	monster.animInfo.currentFrame = 0;
 	monster.animInfo.isPetrified = true;
+	monster.occupyTile(monster.position.tile, false);
 }
 
 std::expected<size_t, std::string> AddMonsterType(_monster_id type, placeflag placeflag)
@@ -4334,7 +4336,9 @@ void ProcessMonsters()
 
 			GroupUnity(monster);
 		}
-		if (monster.mode != MonsterMode::Petrified && (monster.flags & MFLAG_ALLOW_SPECIAL) == 0) {
+		const bool shouldProcessAnimation = monster.mode != MonsterMode::Petrified
+		    && ((monster.flags & MFLAG_ALLOW_SPECIAL) == 0 || monster.mode == MonsterMode::Death);
+		if (shouldProcessAnimation) {
 			monster.animInfo.processAnimation((monster.flags & MFLAG_LOCK_ANIMATION) != 0);
 		}
 	}

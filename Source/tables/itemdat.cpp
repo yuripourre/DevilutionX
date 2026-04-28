@@ -253,7 +253,6 @@ std::expected<item_cursor_graphic, std::string> ParseItemCursorGraphic(std::stri
 	if (value == "BLITZEN") return ICURS_BLITZEN;
 	if (value == "DEMON_PLATE_ARMOR") return ICURS_DEMON_PLATE_ARMOR;
 	if (value == "BOVINE") return ICURS_BOVINE;
-	if (value == "SOULSTONE") return ICURS_SOULSTONE;
 	if (value == "") return ICURS_DEFAULT;
 
 	// also support providing the item cursor icon frame number directly
@@ -458,7 +457,6 @@ std::expected<item_misc_id, std::string> ParseItemMiscId(std::string_view value)
 	if (value == "RUNELAST") return IMISC_RUNELAST;
 	if (value == "AURIC") return IMISC_AURIC;
 	if (value == "NOTE") return IMISC_NOTE;
-	if (value == "SOULSTONE") return IMISC_SOULSTONE;
 	if (value == "ARENAPOT") return IMISC_ARENAPOT;
 	return std::unexpected("Unknown enum value");
 }
@@ -617,8 +615,6 @@ namespace {
 
 void LoadItemDat()
 {
-	FreeCustomItemData();
-	FreeCustomCursorSprites();
 	FreeCustomItemData();
 
 	const std::string_view filename = "txtdata\\items\\itemdat.tsv";

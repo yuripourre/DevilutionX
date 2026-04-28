@@ -2203,8 +2203,6 @@ bool UseInvItem(int cii)
 		return true;
 	}
 
-
-
 	if (item->_iMiscId == IMISC_BOOK)
 		PlaySFX(SfxID::ReadBook);
 	else if (&player == MyPlayer)
