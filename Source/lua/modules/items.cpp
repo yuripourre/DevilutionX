@@ -458,25 +458,8 @@ void RegisterItemSpecialEffectHfEnum(sol::state_view &lua)
 	    });
 }
 
-void AddItemDataFromTsv(const std::string_view path, const int32_t baseMappingId)
+ItemData ParseItemDataTable(sol::table t)
 {
-	DataFile dataFile = DataFile::loadOrDie(path);
-	LoadItemDatFromFile(dataFile, path, baseMappingId);
-}
-
-void AddUniqueItemDataFromTsv(const std::string_view path, const int32_t baseMappingId)
-{
-	DataFile dataFile = DataFile::loadOrDie(path);
-	LoadUniqueItemDatFromFile(dataFile, path, baseMappingId);
-}
-
-void AddItem(sol::table t)
-{
-	int32_t mappingId = t.get<int32_t>("mappingId");
-	if (ItemMappingIdsToIndices.count(mappingId) > 0) {
-		app_fatal(fmt::format("An item already exists for mapping ID {}.", mappingId));
-	}
-
 	ItemData item;
 	item.dropRate = static_cast<uint8_t>(t.get_or("dropRate", 1));
 	item.iClass = t.get_or("class", ICLASS_NONE);
@@ -500,19 +483,11 @@ void AddItem(sol::table t)
 	item.iSpell = t.get_or("spell", SpellID::Null);
 	item.iUsable = t.get_or("usable", false);
 	item.iValue = static_cast<uint16_t>(t.get_or("value", 0));
-	item.iMappingId = mappingId;
-
-	AllItemsList.push_back(std::move(item));
-	ItemMappingIdsToIndices.emplace(mappingId, static_cast<int16_t>(AllItemsList.size()) - 1);
+	return item;
 }
 
-void AddUniqueItem(sol::table t)
+UniqueItem ParseUniqueItemDataTable(sol::table t)
 {
-	int32_t mappingId = t.get<int32_t>("mappingId");
-	if (UniqueItemMappingIdsToIndices.count(mappingId) > 0) {
-		app_fatal(fmt::format("A unique item already exists for mapping ID {}.", mappingId));
-	}
-
 	UniqueItem item;
 	item.UIName = t.get<std::string>("name");
 	item.UICurs = static_cast<item_cursor_graphic>(t.get_or("cursorGraphic", 0));
@@ -532,10 +507,59 @@ void AddUniqueItem(sol::table t)
 			item.UINumPL++;
 		}
 	}
+	return item;
+}
 
-	item.mappingId = mappingId;
-	UniqueItems.push_back(std::move(item));
-	UniqueItemMappingIdsToIndices.emplace(mappingId, static_cast<int32_t>(UniqueItems.size()) - 1);
+void AddItemDataFromTsv(const std::string_view path, const int32_t baseMappingId)
+{
+	DataFile dataFile = DataFile::loadOrDie(path);
+	LoadItemDatFromFile(dataFile, path, baseMappingId);
+}
+
+void AddUniqueItemDataFromTsv(const std::string_view path, const int32_t baseMappingId)
+{
+	DataFile dataFile = DataFile::loadOrDie(path);
+	LoadUniqueItemDatFromFile(dataFile, path, baseMappingId);
+}
+
+void AddItemData(sol::table itemData, const int32_t baseMappingId)
+{
+	const size_t numItems = itemData.size();
+	AllItemsList.reserve(AllItemsList.size() + numItems);
+	for (size_t i = 1; i <= numItems; ++i) {
+		sol::optional<sol::table> itemTable = itemData[i];
+		if (!itemTable) {
+			app_fatal(fmt::format("Expected item data table at index {}.", i));
+		}
+		const int32_t mappingId = baseMappingId + static_cast<int32_t>(i - 1);
+		ItemData item = ParseItemDataTable(*itemTable);
+		item.iMappingId = mappingId;
+		AllItemsList.push_back(std::move(item));
+		const auto [it, inserted] = ItemMappingIdsToIndices.emplace(mappingId, static_cast<int16_t>(AllItemsList.size()) - 1);
+		if (!inserted) {
+			app_fatal(fmt::format("An item already exists for mapping ID {}.", mappingId));
+		}
+	}
+}
+
+void AddUniqueItemData(sol::table itemData, const int32_t baseMappingId)
+{
+	const size_t numItems = itemData.size();
+	UniqueItems.reserve(UniqueItems.size() + numItems);
+	for (size_t i = 1; i <= numItems; ++i) {
+		sol::optional<sol::table> itemTable = itemData[i];
+		if (!itemTable) {
+			app_fatal(fmt::format("Expected unique item data table at index {}.", i));
+		}
+		const int32_t mappingId = baseMappingId + static_cast<int32_t>(i - 1);
+		UniqueItem item = ParseUniqueItemDataTable(*itemTable);
+		item.mappingId = mappingId;
+		UniqueItems.push_back(std::move(item));
+		const auto [it, inserted] = UniqueItemMappingIdsToIndices.emplace(mappingId, static_cast<int32_t>(UniqueItems.size()) - 1);
+		if (!inserted) {
+			app_fatal(fmt::format("A unique item already exists for mapping ID {}.", mappingId));
+		}
+	}
 }
 
 int LuaRegisterCursorGraphic(const std::string &path, int width)
@@ -582,8 +606,8 @@ sol::table LuaItemModule(sol::state_view &lua)
 
 	LuaSetDocFn(table, "addItemDataFromTsv", "(path: string, baseMappingId: number)", AddItemDataFromTsv);
 	LuaSetDocFn(table, "addUniqueItemDataFromTsv", "(path: string, baseMappingId: number)", AddUniqueItemDataFromTsv);
-	LuaSetDocFn(table, "addItem", "(item: table)", "Add a new item definition from a Lua table. Required: name, mappingId. Optional: dropRate, class, equipType, cursorGraphic, type, uniqueBaseItem, shortName, minMonsterLevel, durability, minDam, maxDam, minAC, maxAC, minStr, minMag, minDex, flags, miscId, spell, usable, value.", AddItem);
-	LuaSetDocFn(table, "addUniqueItem", "(item: table)", "Add a new unique item definition from a Lua table. Required: name, mappingId. Optional: cursorGraphic, uniqueBaseItem, minLevel, value, powers (array of {type, param1, param2}).", AddUniqueItem);
+	LuaSetDocFn(table, "addItemData", "(itemData: ItemData[], baseMappingId: number)", "Add item definitions from a list of item data tables. Mapping IDs are assigned sequentially starting from baseMappingId. Each entry requires: name. Optional fields: dropRate, class, equipType, cursorGraphic, type, uniqueBaseItem, shortName, minMonsterLevel, durability, minDam, maxDam, minAC, maxAC, minStr, minMag, minDex, flags, miscId, spell, usable, value.", AddItemData);
+	LuaSetDocFn(table, "addUniqueItemData", "(itemData: UniqueItemData[], baseMappingId: number)", "Add unique item definitions from a list of unique item data tables. Mapping IDs are assigned sequentially starting from baseMappingId. Each entry requires: name. Optional fields: cursorGraphic, uniqueBaseItem, minLevel, value, powers (array of {type, param1, param2}).", AddUniqueItemData);
 	LuaSetDocFn(table, "registerCursorGraphic", "(path: string, width: number) -> number", "Load a sprite for inventory/cursor display and return its cursorGraphic ID.", LuaRegisterCursorGraphic);
 	LuaSetDocFn(table, "registerDropGraphic", "(cursorGraphic: number, path: string, numFrames: number)", "Load a floor drop animation sprite for a custom cursor graphic. If not called, uses the default for the item type.", LuaRegisterDropGraphic);
 	LuaSetDocFn(table, "registerItemSounds", "(cursorGraphic: number, invSound: number|nil, dropSound: number|nil)", "Register custom inventory and drop sounds for a cursor graphic. Use SfxID values from the audio module (e.g. SfxID.ItemRingFlip). For each slot, pass nil or SfxID.None (-1) to keep the default.", LuaRegisterItemSounds);

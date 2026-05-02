@@ -4,6 +4,7 @@
 #include "engine/random.hpp"
 #include "game_mode.hpp"
 #include "items.h"
+#include "lua/modules/items.hpp"
 #include "player.h"
 #include "tables/itemdat.h"
 
@@ -165,6 +166,49 @@ TEST_F(CustomItemsTest, SetCustomItemSounds)
 
 	// Clean up
 	FreeCustomItemData();
+}
+
+TEST_F(CustomItemsTest, LuaAddItemDataAssignsMappingRangeFromCollectionBase)
+{
+	const size_t sizeBefore = AllItemsList.size();
+	constexpr int32_t requestedBaseMappingId = 230000;
+	sol::state lua;
+	sol::table itemModule = LuaItemModule(lua);
+	sol::table itemData = lua.create_table();
+	itemData[1] = lua.create_table_with("name", "Range Test Item One");
+	itemData[2] = lua.create_table_with("name", "Range Test Item Two");
+	sol::function addItemData = itemModule["addItemData"];
+	addItemData(itemData, requestedBaseMappingId);
+
+	EXPECT_EQ(AllItemsList.size(), sizeBefore + 2);
+	EXPECT_EQ(AllItemsList[sizeBefore].iMappingId, requestedBaseMappingId);
+	EXPECT_EQ(AllItemsList[sizeBefore + 1].iMappingId, requestedBaseMappingId + 1);
+	EXPECT_EQ(ItemMappingIdsToIndices.count(requestedBaseMappingId), 1u);
+	EXPECT_EQ(ItemMappingIdsToIndices.count(requestedBaseMappingId + 1), 1u);
+
+	AllItemsList.pop_back();
+	AllItemsList.pop_back();
+	ItemMappingIdsToIndices.erase(requestedBaseMappingId);
+	ItemMappingIdsToIndices.erase(requestedBaseMappingId + 1);
+}
+
+TEST_F(CustomItemsTest, LuaAddUniqueItemDataAssignsMappingRangeFromCollectionBase)
+{
+	const size_t sizeBefore = UniqueItems.size();
+	constexpr int32_t requestedBaseMappingId = 240000;
+	sol::state lua;
+	sol::table itemModule = LuaItemModule(lua);
+	sol::table itemData = lua.create_table();
+	itemData[1] = lua.create_table_with("name", "Range Test Unique");
+	sol::function addUniqueItemData = itemModule["addUniqueItemData"];
+	addUniqueItemData(itemData, requestedBaseMappingId);
+
+	EXPECT_EQ(UniqueItems.size(), sizeBefore + 1);
+	EXPECT_EQ(UniqueItems[sizeBefore].mappingId, requestedBaseMappingId);
+	EXPECT_EQ(UniqueItemMappingIdsToIndices.count(requestedBaseMappingId), 1u);
+
+	UniqueItems.pop_back();
+	UniqueItemMappingIdsToIndices.erase(requestedBaseMappingId);
 }
 
 } // namespace
