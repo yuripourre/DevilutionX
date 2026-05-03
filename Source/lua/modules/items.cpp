@@ -589,6 +589,27 @@ void LuaRegisterDropGraphic(int iCurs, const std::string &path, int numFrames)
 
 } // namespace
 
+int8_t DefaultDropAnimForItemType(ItemType type)
+{
+	switch (type) {
+	case ItemType::Axe: return 1;         // axe
+	case ItemType::Bow: return 3;         // bow
+	case ItemType::Mace: return 6;        // mace
+	case ItemType::Sword: return 8;       // swrdflip
+	case ItemType::Shield: return 7;      // shield
+	case ItemType::LightArmor: return 14; // larmor
+	case ItemType::Helm: return 5;        // helmut
+	case ItemType::MediumArmor: return 0; // armor2
+	case ItemType::HeavyArmor: return 17; // fplatear
+	case ItemType::Staff: return 11;      // staff
+	case ItemType::Gold: return 4;        // goldflip
+	case ItemType::Ring: return 12;       // ring
+	case ItemType::Amulet: return 12;     // ring
+	case ItemType::Misc: return 2;        // fbttle
+	default: return 2;
+	}
+}
+
 sol::table LuaItemModule(sol::state_view &lua)
 {
 	InitItemUserType(lua);
