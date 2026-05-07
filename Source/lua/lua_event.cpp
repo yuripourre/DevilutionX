@@ -74,6 +74,11 @@ void StoreOpened(std::string_view name)
 	CallLuaEvent("StoreOpened", name);
 }
 
+void CubeTransmute()
+{
+	CallLuaEvent("OnCubeTransmute");
+}
+
 void OnMonsterTakeDamage(const Monster *monster, int damage, int damageType)
 {
 	CallLuaEvent("OnMonsterTakeDamage", monster, damage, damageType);

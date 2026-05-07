@@ -122,6 +122,49 @@ events.OnItemUse.add(function(p, item)
   return true
 end)
 
+-- ─── Cube transmutation formulas ─────────────────────────────────────────────
+
+local resultIndices = {}
+
+events.ItemDataLoaded.add(function()
+  resultIndices[items.ItemMiscID.FullHeal]  = game.getItemIndexByMiscId(items.ItemMiscID.FullHeal)
+  resultIndices[items.ItemMiscID.FullMana]  = game.getItemIndexByMiscId(items.ItemMiscID.FullMana)
+  resultIndices[items.ItemMiscID.FullRejuv] = game.getItemIndexByMiscId(items.ItemMiscID.FullRejuv)
+end)
+
+local FORMULAS = {
+  { ingredients = { { miscId = items.ItemMiscID.Heal,  count = 3 } }, resultMiscId = items.ItemMiscID.FullHeal },
+  { ingredients = { { miscId = items.ItemMiscID.Mana,  count = 3 } }, resultMiscId = items.ItemMiscID.FullMana },
+  { ingredients = { { miscId = items.ItemMiscID.Rejuv, count = 3 } }, resultMiscId = items.ItemMiscID.FullRejuv },
+}
+
+local function matchFormula(contents)
+  local counts = {}
+  for _, item in ipairs(contents) do
+    counts[item.miscId] = (counts[item.miscId] or 0) + 1
+  end
+  for _, formula in ipairs(FORMULAS) do
+    local ok, total = true, 0
+    for _, ing in ipairs(formula.ingredients) do
+      if (counts[ing.miscId] or 0) < ing.count then ok = false; break end
+      total = total + ing.count
+    end
+    if ok and #contents == total then return formula end
+  end
+end
+
+events.OnCubeTransmute.add(function()
+  local contents = game.getCubeContents()
+  local formula  = matchFormula(contents)
+  if not formula then return end
+
+  local idx = resultIndices[formula.resultMiscId]
+  if not idx then return end
+
+  game.clearCube()
+  game.placeItemInCube(idx)
+end)
+
 -- ─── Soulstone use ───────────────────────────────────────────────────────────
 
 events.OnItemUse.add(function(p, item)

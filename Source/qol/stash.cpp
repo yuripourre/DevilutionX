@@ -13,6 +13,7 @@
 #include <fmt/format.h>
 
 #include "DiabloUI/text_input.hpp"
+#include "lua/lua_event.hpp"
 #include "control/control.hpp"
 #include "controls/control_mode.hpp"
 #include "controls/plrctrls.h"
@@ -21,6 +22,7 @@
 #include "engine/load_clx.hpp"
 #include "engine/rectangle.hpp"
 #include "engine/render/clx_render.hpp"
+#include "engine/render/primitive_render.hpp"
 #include "engine/render/text_render.hpp"
 #include "engine/size.hpp"
 #include "headless_mode.hpp"
@@ -38,7 +40,8 @@
 namespace devilution {
 
 bool IsStashOpen;
-bool IsCubeMode;
+bool IsReservedStashOpen;
+bool IsReservedTransmuteButtonPressed;
 StashStruct Stash;
 bool IsWithdrawGoldOpen;
 
@@ -81,9 +84,9 @@ void AddItemToStashGrid(unsigned page, Point position, uint16_t stashListIndex, 
 
 std::optional<Point> FindTargetSlotUnderItemCursor(Point cursorPosition, Size itemSize)
 {
-	const Size activeGridSize = IsCubeMode ? CubeGridSize : StashGridSize;
+	const Size activeGridSize = IsReservedStashOpen ? ReservedGridSize : StashGridSize;
 	for (auto point : StashGridRange) {
-		if (IsCubeMode && (point.x >= CubeGridSize.width || point.y >= CubeGridSize.height))
+		if (IsReservedStashOpen && (point.x >= ReservedGridSize.width || point.y >= ReservedGridSize.height))
 			continue;
 		const Rectangle cell {
 			GetStashSlotCoord(point),
@@ -199,7 +202,7 @@ void CheckStashCut(Point cursorPosition, bool automaticMove)
 	Point slot = InvalidStashPoint;
 
 	for (auto point : StashGridRange) {
-		if (IsCubeMode && (point.x >= CubeGridSize.width || point.y >= CubeGridSize.height))
+		if (IsReservedStashOpen && (point.x >= ReservedGridSize.width || point.y >= ReservedGridSize.height))
 			continue;
 		const Rectangle cell {
 			GetStashSlotCoord(point),
@@ -276,8 +279,10 @@ void WithdrawGold(Player &player, int amount)
 Point GetStashSlotCoord(Point slot)
 {
 	constexpr int StashNextCell = INV_SLOT_SIZE_PX + 1; // spacing between each cell
-
-	return GetPanelPosition(UiPanels::Stash, slot * StashNextCell + Displacement { 17, 48 });
+	const Displacement offset = IsReservedStashOpen
+	    ? Displacement { ReservedGridOffset.x, ReservedGridOffset.y }
+	    : Displacement { 17, 48 };
+	return GetPanelPosition(UiPanels::Stash, slot * StashNextCell + offset);
 }
 
 void FreeStashGFX()
@@ -319,7 +324,16 @@ int StashButtonPressed = -1;
 
 void CheckStashButtonRelease(Point mousePosition)
 {
-	if (IsCubeMode || StashButtonPressed == -1)
+	if (IsReservedStashOpen) {
+		if (!IsReservedTransmuteButtonPressed) return;
+		IsReservedTransmuteButtonPressed = false;
+		Rectangle btn = ReservedTransmuteButtonRect;
+		btn.position = GetPanelPosition(UiPanels::Stash, btn.position);
+		if (btn.contains(mousePosition))
+			lua::CubeTransmute();
+		return;
+	}
+	if (StashButtonPressed == -1)
 		return;
 
 	Rectangle stashButton = StashButtonRect[StashButtonPressed];
@@ -349,7 +363,12 @@ void CheckStashButtonRelease(Point mousePosition)
 
 void CheckStashButtonPress(Point mousePosition)
 {
-	if (IsCubeMode) return;
+	if (IsReservedStashOpen) {
+		Rectangle btn = ReservedTransmuteButtonRect;
+		btn.position = GetPanelPosition(UiPanels::Stash, btn.position);
+		IsReservedTransmuteButtonPressed = btn.contains(mousePosition);
+		return;
+	}
 
 	Rectangle stashButton;
 
@@ -369,61 +388,90 @@ void DrawStash(const Surface &out)
 {
 	RenderClxSprite(out, (*StashPanelArt)[0], GetPanelPosition(UiPanels::Stash));
 
-	if (!IsCubeMode && StashButtonPressed != -1) {
-		const Point stashButton = GetPanelPosition(UiPanels::Stash, StashButtonRect[StashButtonPressed].position);
-		RenderClxSprite(out, (*StashNavButtonArt)[StashButtonPressed], stashButton);
+	const Point panelPos = GetPanelPosition(UiPanels::Stash);
+	const UiFlags style = UiFlags::VerticalCenter | UiFlags::ColorWhite;
+	const int textboxHeight = 13;
+
+	if (IsReservedStashOpen) {
+		// Black out everything outside the 3×4 grid area, leaving its background cells visible.
+		// The full original stash area is x=[17,307], y=[19,338]. The 3×4 grid occupies
+		// x=[gridX, gridX+gridW], y=[gridY, gridY+gridH] — 4 rects surround it.
+		constexpr int StashNextCell = INV_SLOT_SIZE_PX + 1;
+		const int gridX = ReservedGridOffset.x;
+		const int gridY = ReservedGridOffset.y;
+		const int gridW = ReservedGridSize.width * StashNextCell;
+		const int gridH = ReservedGridSize.height * StashNextCell;
+		constexpr int areaX = 17, areaY = 19, areaW = 290, areaH = 319;
+		// Top (nav buttons + gap above grid)
+		FillRect(out, panelPos.x + areaX, panelPos.y + areaY, areaW, gridY - areaY, 0);
+		// Left
+		FillRect(out, panelPos.x + areaX, panelPos.y + gridY, gridX - areaX, areaY + areaH - gridY, 0);
+		// Right
+		FillRect(out, panelPos.x + gridX + gridW, panelPos.y + gridY, areaX + areaW - gridX - gridW, areaY + areaH - gridY, 0);
+		// Bottom (below grid, between left and right bands)
+		FillRect(out, panelPos.x + gridX, panelPos.y + gridY + gridH, gridW, areaY + areaH - gridY - gridH, 0);
+	} else {
+		if (StashButtonPressed != -1) {
+			const Point stashButton = GetPanelPosition(UiPanels::Stash, StashButtonRect[StashButtonPressed].position);
+			RenderClxSprite(out, (*StashNavButtonArt)[StashButtonPressed], stashButton);
+		}
 	}
 
 	constexpr Displacement offset { 0, INV_SLOT_SIZE_PX - 1 };
 
 	for (auto slot : StashGridRange) {
-		if (IsCubeMode && (slot.x >= CubeGridSize.width || slot.y >= CubeGridSize.height))
+		if (IsReservedStashOpen && (slot.x >= ReservedGridSize.width || slot.y >= ReservedGridSize.height))
 			continue;
 		const StashStruct::StashCell itemId = Stash.GetItemIdAtPosition(slot);
 		if (itemId == StashStruct::EmptyCell) {
-			continue; // No item in the given slot
+			continue;
 		}
 		const Item &item = Stash.stashList[itemId];
 		InvDrawSlotBack(out, GetStashSlotCoord(slot) + offset, InventorySlotSizeInPixels, item._iMagical);
 	}
 
 	for (auto slot : StashGridRange) {
-		if (IsCubeMode && (slot.x >= CubeGridSize.width || slot.y >= CubeGridSize.height))
+		if (IsReservedStashOpen && (slot.x >= ReservedGridSize.width || slot.y >= ReservedGridSize.height))
 			continue;
 		const StashStruct::StashCell itemId = Stash.GetItemIdAtPosition(slot);
 		if (itemId == StashStruct::EmptyCell) {
-			continue; // No item in the given slot
+			continue;
 		}
 
 		const Item &item = Stash.stashList[itemId];
 		if (item.position != slot) {
-			continue; // Not the first slot of the item
+			continue;
 		}
 
 		const int frame = item._iCurs + CURSOR_FIRSTITEM;
-
-		const Point position = GetStashSlotCoord(item.position) + offset;
+		const Point itemPos = GetStashSlotCoord(item.position) + offset;
 		const ClxSprite sprite = GetInvItemSprite(frame);
 
 		if (pcursstashitem == itemId) {
 			const uint8_t color = GetOutlineColor(item, true);
-			ClxDrawOutline(out, color, position, sprite);
+			ClxDrawOutline(out, color, itemPos, sprite);
 		}
 
-		DrawItem(item, out, position, sprite);
+		DrawItem(item, out, itemPos, sprite);
 	}
 
-	const Point position = GetPanelPosition(UiPanels::Stash);
-	const UiFlags style = UiFlags::VerticalCenter | UiFlags::ColorWhite;
-	const int textboxHeight = 13;
+	if (IsReservedStashOpen) {
+		// Transmute button (drawn after items so it appears on top)
+		const Point btnPos = panelPos + Displacement {
+			ReservedTransmuteButtonRect.position.x, ReservedTransmuteButtonRect.position.y
+		};
+		FillRect(out, btnPos.x, btnPos.y,
+		    ReservedTransmuteButtonRect.size.width, ReservedTransmuteButtonRect.size.height,
+		    IsReservedTransmuteButtonPressed ? PAL16_BLUE + 2 : PAL16_BLUE + 6);
+		DrawString(out, "Transmute", { btnPos, ReservedTransmuteButtonRect.size },
+		    { .flags = UiFlags::AlignCenter | UiFlags::VerticalCenter | UiFlags::ColorWhite });
 
-	if (IsCubeMode) {
-		DrawString(out, "Cube", { position + Displacement { 100, 0 }, { 120, textboxHeight } },
+		DrawString(out, "Cube", { panelPos + Displacement { 0, 20 }, { 320, textboxHeight } },
 		    { .flags = UiFlags::AlignCenter | style });
 	} else {
-		DrawString(out, StrCat(Stash.GetPage() + 1), { position + Displacement { 132, 0 }, { 57, textboxHeight } },
+		DrawString(out, StrCat(Stash.GetPage() + 1), { panelPos + Displacement { 132, 0 }, { 57, textboxHeight } },
 		    { .flags = UiFlags::AlignCenter | style });
-		DrawString(out, FormatInteger(Stash.gold), { position + Displacement { 122, 19 }, { 107, textboxHeight } },
+		DrawString(out, FormatInteger(Stash.gold), { panelPos + Displacement { 122, 19 }, { 107, textboxHeight } },
 		    { .flags = UiFlags::AlignRight | style });
 	}
 }
@@ -443,7 +491,7 @@ uint16_t CheckStashHLight(Point mousePosition)
 {
 	Point slot = InvalidStashPoint;
 	for (auto point : StashGridRange) {
-		if (IsCubeMode && (point.x >= CubeGridSize.width || point.y >= CubeGridSize.height))
+		if (IsReservedStashOpen && (point.x >= ReservedGridSize.width || point.y >= ReservedGridSize.height))
 			continue;
 		const Rectangle cell {
 			GetStashSlotCoord(point),
@@ -609,18 +657,19 @@ void StashStruct::RefreshItemStatFlags()
 	}
 }
 
-void ToggleCube()
+void ToggleReservedStash()
 {
-	if (IsStashOpen && IsCubeMode) {
+	if (IsStashOpen && IsReservedStashOpen) {
 		IsStashOpen = false;
-		IsCubeMode = false;
+		IsReservedStashOpen = false;
+		IsReservedTransmuteButtonPressed = false;
 		return;
 	}
 	if (IsPlayerInStore())
 		return;
 	IsStashOpen = true;
-	IsCubeMode = true;
-	Stash.SetPage(CubePage);
+	IsReservedStashOpen = true;
+	Stash.SetPage(ReservedStashPage);
 	Stash.RefreshItemStatFlags();
 	invflag = true;
 	if (ControlMode != ControlTypes::KeyboardAndMouse) {

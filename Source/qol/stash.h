@@ -78,13 +78,16 @@ extern int WithdrawGoldValue;
 inline constexpr Size StashGridSize { 10, 10 };
 inline constexpr PointsInRectangle<int> StashGridRange { { { 0, 0 }, StashGridSize } };
 
-// Cube mode: a 3-column × 4-row (12-slot) sub-grid on a reserved stash page
-inline constexpr unsigned CubePage = 99;
-inline constexpr Size CubeGridSize { 3, 4 };
-inline constexpr PointsInRectangle<int> CubeGridRange { { { 0, 0 }, CubeGridSize } };
+// Reserved stash page: a 3-column × 4-row (12-slot) sub-grid on a dedicated stash page
+inline constexpr unsigned ReservedStashPage = 99;
+inline constexpr Size ReservedGridSize { 3, 4 };
+inline constexpr PointsInRectangle<int> ReservedGridRange { { { 0, 0 }, ReservedGridSize } };
+inline constexpr Point ReservedGridOffset { 104, 106 };
+inline constexpr Rectangle ReservedTransmuteButtonRect { { 100, 232 }, { 120, 20 } };
 
-extern bool IsCubeMode;
-void ToggleCube();
+extern bool IsReservedStashOpen;
+extern bool IsReservedTransmuteButtonPressed;
+void ToggleReservedStash();
 
 Point GetStashSlotCoord(Point slot);
 void InitStash();

@@ -16,6 +16,7 @@ void ItemDataLoaded();
 void UniqueItemDataLoaded();
 
 void StoreOpened(std::string_view name);
+void CubeTransmute();
 
 void OnMonsterTakeDamage(const Monster *monster, int damage, int damageType);
 

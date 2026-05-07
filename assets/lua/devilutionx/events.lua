@@ -105,6 +105,10 @@ local events = {
   StoreOpened = CreateEvent(),
   __doc_StoreOpened = "Called when opening a towner store. Passes the towner name as argument.",
 
+  ---Called when the Transmute button is clicked in the Cube panel.
+  OnCubeTransmute = CreateEvent(),
+  __doc_OnCubeTransmute = "Fired when the Transmute button is clicked in the Cube panel.",
+
   ---Called when a Monster takes damage.
   OnMonsterTakeDamage = CreateEvent(),
   __doc_OnMonsterTakeDamage = "Called when a Monster takes damage.",
