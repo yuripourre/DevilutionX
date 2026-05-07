@@ -2266,6 +2266,7 @@ void CloseStash()
 	}
 
 	IsStashOpen = false;
+	IsCubeMode = false;
 }
 
 void DoTelekinesis()

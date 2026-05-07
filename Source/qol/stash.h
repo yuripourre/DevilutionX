@@ -78,6 +78,14 @@ extern int WithdrawGoldValue;
 inline constexpr Size StashGridSize { 10, 10 };
 inline constexpr PointsInRectangle<int> StashGridRange { { { 0, 0 }, StashGridSize } };
 
+// Cube mode: a 3-column × 4-row (12-slot) sub-grid on a reserved stash page
+inline constexpr unsigned CubePage = 99;
+inline constexpr Size CubeGridSize { 3, 4 };
+inline constexpr PointsInRectangle<int> CubeGridRange { { { 0, 0 }, CubeGridSize } };
+
+extern bool IsCubeMode;
+void ToggleCube();
+
 Point GetStashSlotCoord(Point slot);
 void InitStash();
 void FreeStashGFX();

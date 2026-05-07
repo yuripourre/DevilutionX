@@ -1,10 +1,13 @@
--- Soulstone Mod
+-- Soulstone + Cube Mod
 --
--- Implements Diablo's Soulstone quest item entirely in Lua:
+-- Soulstone: Implements Diablo's Soulstone quest item entirely in Lua:
 --   - Defines the soulstone item using the custom items API (no TSV, no custom sprite).
 --   - Spawns the soulstone when Diablo dies (at the last frame of his death animation).
 --   - Right-clicking the soulstone on level 16, after Diablo is defeated, triggers
 --     the game-ending sequence on all clients (multiplayer included).
+--
+-- Cube: A 12-slot (3 columns × 4 rows) personal container item.
+--   - Right-click the Cube in inventory to open/close it.
 
 local events   = require("devilutionx.events")
 local items    = require("devilutionx.items")
@@ -12,7 +15,7 @@ local monsters = require("devilutionx.monsters")
 local player   = require("devilutionx.player")
 local game     = require("devilutionx.game")
 
--- ─── Item definition ─────────────────────────────────────────────────────────
+-- ─── Soulstone item definition ───────────────────────────────────────────────
 
 local SOULSTONE_MAPPING_ID = 10001
 -- Frame 36 of objcurs.cel (the bloodstone graphic) is reused as the soulstone cursor.
@@ -23,6 +26,19 @@ local handledDiabloDeaths = {}
 
 events.GameStart.add(function()
   handledDiabloDeaths = {}
+end)
+
+-- ─── Cube item definition ─────────────────────────────────────────────────────
+
+local CUBE_MAPPING_ID = 10002
+-- Frame 23 of objcurs.cel is reused as the cube cursor.
+local CUBE_CURSOR = 23
+
+local cubeItemIdx = nil
+local cubeGivenByFarnham = false
+
+events.GameStart.add(function()
+  cubeGivenByFarnham = false
 end)
 
 events.ItemDataLoaded.add(function()
@@ -39,6 +55,20 @@ events.ItemDataLoaded.add(function()
     dropRate      = 0,
   })
   soulstoneItemIdx = items.getItemIndex(SOULSTONE_MAPPING_ID)
+
+  items.addItem({
+    mappingId     = CUBE_MAPPING_ID,
+    name          = "Cube",
+    shortName     = "Cube",
+    type          = items.ItemType.Misc,
+    class         = items.ItemClass.Misc,
+    equipType     = items.ItemEquipType.Unequipable,
+    cursorGraphic = CUBE_CURSOR,
+    usable        = true,
+    value         = 100,
+    dropRate      = 10,
+  })
+  cubeItemIdx = items.getItemIndex(CUBE_MAPPING_ID)
 end)
 
 -- ─── Diablo death: resurrect beam + soulstone drop + wounded towner ──────────
@@ -67,6 +97,28 @@ events.OnMonsterDeath.add(function(monster, deathFrame)
   if self ~= nil then
     self:say(player.HeroSpeech.VengeanceIsMine)
   end
+  return true
+end)
+
+-- ─── Farnham gives the cube ──────────────────────────────────────────────────
+
+events.StoreOpened.add(function(name)
+  if name ~= "farnham" then return end
+  if cubeGivenByFarnham or cubeItemIdx == nil then return end
+  cubeGivenByFarnham = true
+  local p = player.self()
+  if p == nil then return end
+  local pos = p.position
+  items.spawnQuestItem(cubeItemIdx, pos.x, pos.y, true)
+end)
+
+-- ─── Cube use ────────────────────────────────────────────────────────────────
+
+events.OnItemUse.add(function(p, item)
+  if item.curs ~= CUBE_CURSOR then
+    return false
+  end
+  game.toggleCube()
   return true
 end)
 

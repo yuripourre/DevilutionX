@@ -6,6 +6,7 @@
 #include "missiles.h"
 #include "monster.h"
 #include "multi.h"
+#include "qol/stash.h"
 #include "quests.h"
 #include "tables/objdat.h"
 
@@ -46,6 +47,10 @@ sol::table LuaGameModule(sol::state_view &lua)
 	    [](const Monster &monster) {
 		    LuaReplaceMonsterWithWoundedTowner(const_cast<Monster &>(monster));
 	    });
+
+	LuaSetDocFn(table, "toggleCube", "()",
+	    "Opens the Cube (12-slot container) if closed, closes it if open.",
+	    []() { ToggleCube(); });
 
 	// Named constants for quest IDs (values match the quest_id enum in tables/objdat.h).
 	table["QuestID"] = lua.create_table_with(

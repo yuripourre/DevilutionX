@@ -14,6 +14,7 @@
 
 #include "DiabloUI/text_input.hpp"
 #include "control/control.hpp"
+#include "controls/control_mode.hpp"
 #include "controls/plrctrls.h"
 #include "cursor.h"
 #include "engine/clx_sprite.hpp"
@@ -37,6 +38,7 @@
 namespace devilution {
 
 bool IsStashOpen;
+bool IsCubeMode;
 StashStruct Stash;
 bool IsWithdrawGoldOpen;
 
@@ -79,7 +81,10 @@ void AddItemToStashGrid(unsigned page, Point position, uint16_t stashListIndex, 
 
 std::optional<Point> FindTargetSlotUnderItemCursor(Point cursorPosition, Size itemSize)
 {
+	const Size activeGridSize = IsCubeMode ? CubeGridSize : StashGridSize;
 	for (auto point : StashGridRange) {
+		if (IsCubeMode && (point.x >= CubeGridSize.width || point.y >= CubeGridSize.height))
+			continue;
 		const Rectangle cell {
 			GetStashSlotCoord(point),
 			InventorySlotSizeInPixels + 1
@@ -103,8 +108,8 @@ std::optional<Point> FindTargetSlotUnderItemCursor(Point cursorPosition, Size it
 				hotPixelCellOffset.deltaY++;
 			}
 			// Then work out the top left cell of the nearest area that could fit this item (as pasting on the edge of the stash would otherwise put it out of bounds)
-			point.y = std::clamp(point.y - hotPixelCellOffset.deltaY, 0, StashGridSize.height - itemSize.height);
-			point.x = std::clamp(point.x - hotPixelCellOffset.deltaX, 0, StashGridSize.width - itemSize.width);
+			point.y = std::clamp(point.y - hotPixelCellOffset.deltaY, 0, activeGridSize.height - itemSize.height);
+			point.x = std::clamp(point.x - hotPixelCellOffset.deltaX, 0, activeGridSize.width - itemSize.width);
 			return point;
 		}
 	}
@@ -194,6 +199,8 @@ void CheckStashCut(Point cursorPosition, bool automaticMove)
 	Point slot = InvalidStashPoint;
 
 	for (auto point : StashGridRange) {
+		if (IsCubeMode && (point.x >= CubeGridSize.width || point.y >= CubeGridSize.height))
+			continue;
 		const Rectangle cell {
 			GetStashSlotCoord(point),
 			InventorySlotSizeInPixels + 1
@@ -312,7 +319,7 @@ int StashButtonPressed = -1;
 
 void CheckStashButtonRelease(Point mousePosition)
 {
-	if (StashButtonPressed == -1)
+	if (IsCubeMode || StashButtonPressed == -1)
 		return;
 
 	Rectangle stashButton = StashButtonRect[StashButtonPressed];
@@ -342,6 +349,8 @@ void CheckStashButtonRelease(Point mousePosition)
 
 void CheckStashButtonPress(Point mousePosition)
 {
+	if (IsCubeMode) return;
+
 	Rectangle stashButton;
 
 	for (int i = 0; i < 5; i++) {
@@ -360,7 +369,7 @@ void DrawStash(const Surface &out)
 {
 	RenderClxSprite(out, (*StashPanelArt)[0], GetPanelPosition(UiPanels::Stash));
 
-	if (StashButtonPressed != -1) {
+	if (!IsCubeMode && StashButtonPressed != -1) {
 		const Point stashButton = GetPanelPosition(UiPanels::Stash, StashButtonRect[StashButtonPressed].position);
 		RenderClxSprite(out, (*StashNavButtonArt)[StashButtonPressed], stashButton);
 	}
@@ -368,6 +377,8 @@ void DrawStash(const Surface &out)
 	constexpr Displacement offset { 0, INV_SLOT_SIZE_PX - 1 };
 
 	for (auto slot : StashGridRange) {
+		if (IsCubeMode && (slot.x >= CubeGridSize.width || slot.y >= CubeGridSize.height))
+			continue;
 		const StashStruct::StashCell itemId = Stash.GetItemIdAtPosition(slot);
 		if (itemId == StashStruct::EmptyCell) {
 			continue; // No item in the given slot
@@ -377,6 +388,8 @@ void DrawStash(const Surface &out)
 	}
 
 	for (auto slot : StashGridRange) {
+		if (IsCubeMode && (slot.x >= CubeGridSize.width || slot.y >= CubeGridSize.height))
+			continue;
 		const StashStruct::StashCell itemId = Stash.GetItemIdAtPosition(slot);
 		if (itemId == StashStruct::EmptyCell) {
 			continue; // No item in the given slot
@@ -404,10 +417,15 @@ void DrawStash(const Surface &out)
 	const UiFlags style = UiFlags::VerticalCenter | UiFlags::ColorWhite;
 	const int textboxHeight = 13;
 
-	DrawString(out, StrCat(Stash.GetPage() + 1), { position + Displacement { 132, 0 }, { 57, textboxHeight } },
-	    { .flags = UiFlags::AlignCenter | style });
-	DrawString(out, FormatInteger(Stash.gold), { position + Displacement { 122, 19 }, { 107, textboxHeight } },
-	    { .flags = UiFlags::AlignRight | style });
+	if (IsCubeMode) {
+		DrawString(out, "Cube", { position + Displacement { 100, 0 }, { 120, textboxHeight } },
+		    { .flags = UiFlags::AlignCenter | style });
+	} else {
+		DrawString(out, StrCat(Stash.GetPage() + 1), { position + Displacement { 132, 0 }, { 57, textboxHeight } },
+		    { .flags = UiFlags::AlignCenter | style });
+		DrawString(out, FormatInteger(Stash.gold), { position + Displacement { 122, 19 }, { 107, textboxHeight } },
+		    { .flags = UiFlags::AlignRight | style });
+	}
 }
 
 void CheckStashItem(Point mousePosition, bool isShiftHeld, bool isCtrlHeld)
@@ -425,6 +443,8 @@ uint16_t CheckStashHLight(Point mousePosition)
 {
 	Point slot = InvalidStashPoint;
 	for (auto point : StashGridRange) {
+		if (IsCubeMode && (point.x >= CubeGridSize.width || point.y >= CubeGridSize.height))
+			continue;
 		const Rectangle cell {
 			GetStashSlotCoord(point),
 			InventorySlotSizeInPixels + 1
@@ -586,6 +606,27 @@ void StashStruct::RefreshItemStatFlags()
 {
 	for (auto &item : Stash.stashList) {
 		item.updateRequiredStatsCacheForPlayer(*MyPlayer);
+	}
+}
+
+void ToggleCube()
+{
+	if (IsStashOpen && IsCubeMode) {
+		IsStashOpen = false;
+		IsCubeMode = false;
+		return;
+	}
+	if (IsPlayerInStore())
+		return;
+	IsStashOpen = true;
+	IsCubeMode = true;
+	Stash.SetPage(CubePage);
+	Stash.RefreshItemStatFlags();
+	invflag = true;
+	if (ControlMode != ControlTypes::KeyboardAndMouse) {
+		if (pcurs == CURSOR_DISARM)
+			NewCursor(CURSOR_HAND);
+		FocusOnInventory();
 	}
 }
 
