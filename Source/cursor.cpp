@@ -18,10 +18,8 @@
 #include <SDL.h>
 #endif
 
-#include <fmt/format.h>
-
 #include "DiabloUI/diabloui.h"
-#include "control.h"
+#include "control/control.hpp"
 #include "controls/control_mode.hpp"
 #include "controls/plrctrls.h"
 #include "doom.h"
@@ -40,9 +38,11 @@
 #include "options.h"
 #include "qol/itemlabels.h"
 #include "qol/stash.h"
+#include "qol/visual_store.h"
 #include "towners.h"
 #include "track.h"
 #include "utils/attributes.h"
+#include "utils/format.hpp"
 #include "utils/is_of.hpp"
 #include "utils/language.h"
 #include "utils/palette_blending.hpp"
@@ -627,7 +627,7 @@ void CheckTown()
 			if (EntranceBoundaryContains(missile.position.tile, cursPosition)) {
 				trigflag = true;
 				InfoString = _("Town Portal");
-				AddInfoBoxString(fmt::format(fmt::runtime(_("from {:s}")), Players[missile._misource]._pName));
+				AddInfoBoxString(FormatRuntime(_("from {:s}"), Players[missile._misource]._pName));
 				cursPosition = missile.position.tile;
 			}
 		}
@@ -802,6 +802,8 @@ void ResetCursorInfo()
 	}
 	pcursinvitem = -1;
 	pcursstashitem = StashStruct::EmptyCell;
+	pcursstoreitem = -1;
+	pcursstorebtn = -1;
 	PlayerUnderCursor = nullptr;
 	ShowUniqueItemInfoBox = false;
 	MainPanelFlag = false;
@@ -835,6 +837,9 @@ bool CheckPanelsAndFlags(Rectangle mainPanel)
 	}
 	if (IsStashOpen && GetLeftPanel().contains(MousePosition)) {
 		pcursstashitem = CheckStashHLight(MousePosition);
+	}
+	if (IsVisualStoreOpen && GetLeftPanel().contains(MousePosition)) {
+		pcursstoreitem = CheckVisualStoreHLight(MousePosition);
 	}
 	if (SpellbookFlag && GetRightPanel().contains(MousePosition)) {
 		return true;
