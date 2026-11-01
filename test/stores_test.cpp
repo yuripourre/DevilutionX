@@ -194,4 +194,157 @@ TEST(Stores, RegisterTownerDialogOption_multipleTowners)
 	ClearTownerDialogOptions();
 }
 
+constexpr int TestMenuMinLine = 10;
+constexpr int TestTalkLine = 12;
+constexpr int TestLeaveLine = 18;
+
+TownerMenuEntry MakeEntry(int line, std::string text, std::function<void()> onSelect = {})
+{
+	return { line, std::move(text), UiFlags::ColorWhite, true, std::move(onSelect) };
+}
+
+/** A menu shaped like Farnham's: Talk, Leave. */
+TownerMenu MakeTalkLeaveMenu()
+{
+	TownerMenu menu;
+	menu.minLine = TestMenuMinLine;
+	menu.entries.push_back(MakeEntry(TestTalkLine, "Talk"));
+	menu.entries.push_back(MakeEntry(TestLeaveLine, "Leave"));
+	return menu;
+}
+
+std::vector<TownerMenuEntry> MakeExtras(std::initializer_list<const char *> labels)
+{
+	std::vector<TownerMenuEntry> extras;
+	for (const char *label : labels)
+		extras.push_back(MakeEntry(0, label));
+	return extras;
+}
+
+std::vector<std::string> Texts(const TownerMenu &menu)
+{
+	std::vector<std::string> texts;
+	for (const TownerMenuEntry &entry : menu.entries)
+		texts.push_back(entry.text);
+	return texts;
+}
+
+/** Lines must strictly increase so that on-screen order matches menu order. */
+void ExpectIncreasingLines(const TownerMenu &menu)
+{
+	for (size_t i = 1; i < menu.entries.size(); ++i)
+		EXPECT_GT(menu.entries[i].line, menu.entries[i - 1].line) << "entry " << i;
+}
+
+TEST(Stores, PlaceExtraMenuEntries_threeOptionsStayInRegistrationOrder)
+{
+	TownerMenu menu = MakeTalkLeaveMenu();
+
+	EXPECT_EQ(PlaceExtraMenuEntries(menu, MakeExtras({ "Option A", "Option B", "Option C" })), 0u);
+
+	EXPECT_EQ(Texts(menu), (std::vector<std::string> { "Talk", "Option A", "Option B", "Option C", "Leave" }));
+	ExpectIncreasingLines(menu);
+	// Talk had to move up to make room, and leave stayed where it was.
+	EXPECT_EQ(menu.entries.front().line, TestMenuMinLine);
+	EXPECT_EQ(menu.entries.back().line, TestLeaveLine);
+}
+
+TEST(Stores, PlaceExtraMenuEntries_singleOptionLeavesBuiltInsInPlace)
+{
+	TownerMenu menu = MakeTalkLeaveMenu();
+
+	EXPECT_EQ(PlaceExtraMenuEntries(menu, MakeExtras({ "Option A" })), 0u);
+
+	EXPECT_EQ(Texts(menu), (std::vector<std::string> { "Talk", "Option A", "Leave" }));
+	EXPECT_EQ(menu.entries[0].line, TestTalkLine);
+	EXPECT_EQ(menu.entries[1].line, TestTalkLine + TownerMenuLineStep);
+	EXPECT_EQ(menu.entries[2].line, TestLeaveLine);
+}
+
+TEST(Stores, PlaceExtraMenuEntries_noExtrasChangesNothing)
+{
+	TownerMenu menu = MakeTalkLeaveMenu();
+
+	EXPECT_EQ(PlaceExtraMenuEntries(menu, {}), 0u);
+
+	EXPECT_EQ(Texts(menu), (std::vector<std::string> { "Talk", "Leave" }));
+	EXPECT_EQ(menu.entries[0].line, TestTalkLine);
+	EXPECT_EQ(menu.entries[1].line, TestLeaveLine);
+}
+
+TEST(Stores, PlaceExtraMenuEntries_leaveMovesDownWhenMenuIsFull)
+{
+	TownerMenu menu = MakeTalkLeaveMenu();
+
+	EXPECT_EQ(PlaceExtraMenuEntries(menu, MakeExtras({ "A", "B", "C", "D" })), 0u);
+
+	EXPECT_EQ(Texts(menu), (std::vector<std::string> { "Talk", "A", "B", "C", "D", "Leave" }));
+	ExpectIncreasingLines(menu);
+	EXPECT_EQ(menu.entries.front().line, TestMenuMinLine);
+	EXPECT_EQ(menu.entries.back().line, TownerMenuMaxLine);
+}
+
+TEST(Stores, PlaceExtraMenuEntries_dropsOptionsThatDoNotFit)
+{
+	TownerMenu menu = MakeTalkLeaveMenu();
+
+	EXPECT_EQ(PlaceExtraMenuEntries(menu, MakeExtras({ "A", "B", "C", "D", "E", "F" })), 2u);
+
+	EXPECT_EQ(Texts(menu), (std::vector<std::string> { "Talk", "A", "B", "C", "D", "Leave" }));
+	ExpectIncreasingLines(menu);
+	EXPECT_LE(menu.entries.back().line, TownerMenuMaxLine);
+	EXPECT_GE(menu.entries.front().line, TestMenuMinLine);
+}
+
+TEST(Stores, PlaceExtraMenuEntries_keepsGapsBetweenBuiltInEntries)
+{
+	// Shaped like Wirt's menu with an item: Talk, three labels, "What have you got?", Leave.
+	constexpr int BoyMinLine = 6;
+	TownerMenu menu;
+	menu.minLine = BoyMinLine;
+	menu.entries.push_back(MakeEntry(8, "Talk"));
+	menu.entries.push_back(MakeEntry(12, "Label 1"));
+	menu.entries.push_back(MakeEntry(14, "Label 2"));
+	menu.entries.push_back(MakeEntry(16, "Label 3"));
+	menu.entries.push_back(MakeEntry(18, "Buy"));
+	menu.entries.push_back(MakeEntry(20, "Leave"));
+
+	EXPECT_EQ(PlaceExtraMenuEntries(menu, MakeExtras({ "A", "B" })), 1u);
+
+	EXPECT_EQ(Texts(menu), (std::vector<std::string> { "Talk", "Label 1", "Label 2", "Label 3", "Buy", "A", "Leave" }));
+	ExpectIncreasingLines(menu);
+	// Everything above the extras moved up by one step as a block.
+	EXPECT_EQ(menu.entries[0].line, 6);
+	EXPECT_EQ(menu.entries[1].line, 10);
+	EXPECT_EQ(menu.entries[4].line, 16);
+	EXPECT_EQ(menu.entries[5].line, 18);
+	EXPECT_EQ(menu.entries[6].line, 20);
+}
+
+TEST(Stores, PlaceExtraMenuEntries_menuWithoutBuiltInsDropsEverything)
+{
+	TownerMenu menu;
+	menu.minLine = TestMenuMinLine;
+	menu.entries.push_back(MakeEntry(TestLeaveLine, "Leave"));
+
+	EXPECT_EQ(PlaceExtraMenuEntries(menu, MakeExtras({ "A", "B" })), 2u);
+	EXPECT_EQ(Texts(menu), (std::vector<std::string> { "Leave" }));
+}
+
+TEST(Stores, PlaceExtraMenuEntries_preservesOnSelect)
+{
+	TownerMenu menu = MakeTalkLeaveMenu();
+	int selected = 0;
+	std::vector<TownerMenuEntry> extras;
+	extras.push_back(MakeEntry(0, "A", [&selected]() { selected = 1; }));
+	extras.push_back(MakeEntry(0, "B", [&selected]() { selected = 2; }));
+
+	PlaceExtraMenuEntries(menu, std::move(extras));
+
+	menu.entries[2].onSelect();
+	EXPECT_EQ(selected, 2);
+	menu.entries[1].onSelect();
+	EXPECT_EQ(selected, 1);
+}
+
 } // namespace

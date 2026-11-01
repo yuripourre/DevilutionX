@@ -6,7 +6,9 @@
 #include "stores.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -125,13 +127,6 @@ void RegisterTownerDialogOption(std::string_view townerName,
 	}
 }
 
-/**
- * Maps dialog line number to ExtraTownerOptions vector index for
- * options visible in the current dialog session.
- * Indexed by text line number (0..NumStoreLines-1).
- */
-static std::optional<size_t> CurrentExtraOptionIndices[NumStoreLines];
-
 /** The top-level towner menu currently being displayed (if any). */
 static TownerMenu ActiveTownerMenu;
 
@@ -141,7 +136,73 @@ static size_t OldMenuEntry = 0;
 void ClearTownerDialogOptions()
 {
 	ExtraTownerOptions.clear();
-	std::fill(std::begin(CurrentExtraOptionIndices), std::end(CurrentExtraOptionIndices), std::nullopt);
+	// Menu entries hold copies of the Lua callbacks, so they must go too.
+	ActiveTownerMenu = {};
+}
+
+size_t PlaceExtraMenuEntries(TownerMenu &menu, std::vector<TownerMenuEntry> extras)
+{
+	constexpr size_t MinEntriesForExtras = 2; // At least one built-in entry plus the leave entry.
+	if (extras.empty())
+		return 0;
+	if (menu.entries.size() < MinEntriesForExtras)
+		return extras.size();
+
+	const size_t leaveIndex = menu.entries.size() - 1;
+	const int firstLine = menu.entries.front().line;
+	const int lastBuiltInLine = menu.entries[leaveIndex - 1].line;
+	const int leaveLine = menu.entries[leaveIndex].line;
+
+	// Free slots between the last built-in entry and the leave entry.
+	const int freeGapSlots = (leaveLine - lastBuiltInLine) / TownerMenuLineStep - 1;
+	// Slots gained by moving the built-in entries up towards the header.
+	const int maxShiftUp = std::max((firstLine - menu.minLine) / TownerMenuLineStep, 0);
+	// Slots gained by moving the leave entry down towards the bottom of the panel.
+	const int maxShiftDown = std::max((TownerMenuMaxLine - leaveLine) / TownerMenuLineStep, 0);
+
+	const int capacity = freeGapSlots + maxShiftUp + maxShiftDown;
+	const int shown = std::min(static_cast<int>(extras.size()), capacity);
+	const size_t dropped = extras.size() - static_cast<size_t>(shown);
+
+	const int needsShift = std::max(shown - freeGapSlots, 0);
+	const int shiftUp = std::min(needsShift, maxShiftUp);
+	const int shiftDown = needsShift - shiftUp;
+
+	for (size_t i = 0; i < leaveIndex; ++i)
+		menu.entries[i].line -= shiftUp * TownerMenuLineStep;
+	menu.entries[leaveIndex].line += shiftDown * TownerMenuLineStep;
+
+	const int firstExtraLine = lastBuiltInLine - shiftUp * TownerMenuLineStep + TownerMenuLineStep;
+	for (int i = 0; i < shown; ++i)
+		extras[i].line = firstExtraLine + i * TownerMenuLineStep;
+
+	menu.entries.insert(menu.entries.begin() + static_cast<std::ptrdiff_t>(leaveIndex),
+	    std::make_move_iterator(extras.begin()),
+	    std::make_move_iterator(extras.begin() + shown));
+	return dropped;
+}
+
+/** Builds menu entries for the mod-registered options of a towner. Options with empty labels are skipped. */
+static std::vector<TownerMenuEntry> BuildExtraMenuEntries(std::string_view townerName)
+{
+	std::vector<TownerMenuEntry> result;
+	const std::vector<TownerDialogOption> *found = FindExtraTownerOptions(townerName);
+	if (found == nullptr)
+		return result;
+	// Copy: getLabel() runs Lua, which may register more options and reallocate the vectors.
+	const std::vector<TownerDialogOption> options = *found;
+	for (const TownerDialogOption &option : options) {
+		std::string label = option.getLabel();
+		if (label.empty())
+			continue;
+		result.push_back({ 0, std::move(label), UiFlags::ColorWhite | UiFlags::AlignCenter, true,
+		    [select = option.onSelect]() {
+			    // Close the dialog by default. If select() opens another store, that is preserved.
+			    ActiveStore = TalkID::None;
+			    select();
+		    } });
+	}
+	return result;
 }
 
 /** Index of the selected entry in the active towner menu, if the menu is showing and has a selection. */
@@ -361,9 +422,10 @@ void AddSText(uint8_t x, size_t y, std::string_view text, UiFlags flags, bool se
 }
 
 /** Starts building a top-level towner menu. The entries are drawn by ApplyTownerMenu. */
-void BeginTownerMenu()
+void BeginTownerMenu(int minLine)
 {
 	ActiveTownerMenu = {};
+	ActiveTownerMenu.minLine = minLine;
 }
 
 void AddMenuEntry(int line, std::string_view text, UiFlags flags, bool selectable, std::function<void()> onSelect = {})
@@ -403,10 +465,16 @@ void AddVisualStoreMenuEntry(int line, std::string_view text, VisualStoreVendor 
 	});
 }
 
-/** Draws the entries of the menu being built into TextLine. */
+/** Adds mod options to the menu being built and draws all entries into TextLine. */
 void ApplyTownerMenu(TalkID store)
 {
 	ActiveTownerMenu.store = store;
+	if (const char *townerName = TownerNameForTalkID(store); townerName != nullptr) {
+		const size_t dropped = PlaceExtraMenuEntries(ActiveTownerMenu, BuildExtraMenuEntries(townerName));
+		if (dropped > 0) {
+			LogWarn("Towner \"{}\" dialog: {} extra option(s) could not be placed (menu is full)", townerName, dropped);
+		}
+	}
 	for (const TownerMenuEntry &entry : ActiveTownerMenu.entries) {
 		AddSText(0, entry.line, entry.text, entry.flags, entry.selectable);
 	}
@@ -414,6 +482,11 @@ void ApplyTownerMenu(TalkID store)
 
 /** Every top-level menu starts with "Talk to <towner>". */
 constexpr size_t TalkMenuEntry = 0;
+
+/** Text lines just below the header rows of each menu layout. Built-in entries may move up to these. */
+constexpr int SmithMenuMinLine = 8;
+constexpr int DefaultMenuMinLine = 10;
+constexpr int BoyMenuMinLine = 6;
 
 void AddOptionsBackButton()
 {
@@ -520,7 +593,7 @@ void StartSmith()
 	AddSText(0, 1, _("Welcome to the"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSText(0, 3, _("Blacksmith's shop"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSText(0, 7, _("Would you like to:"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
-	BeginTownerMenu();
+	BeginTownerMenu(SmithMenuMinLine);
 	AddTalkMenuEntry(10, _("Talk to Griswold"), TOWN_SMITH, TalkID::Smith);
 	if (*GetOptions().Gameplay.storeUi == StoreUi::VisualGrid) {
 		AddVisualStoreMenuEntry(12, _("Trade / Repair"), VisualStoreVendor::Smith);
@@ -778,7 +851,7 @@ void StartWitch()
 	HasScrollbar = false;
 	AddSText(0, 2, _("Witch's shack"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSText(0, 9, _("Would you like to:"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
-	BeginTownerMenu();
+	BeginTownerMenu(DefaultMenuMinLine);
 	AddTalkMenuEntry(12, _("Talk to Adria"), TOWN_WITCH, TalkID::Witch);
 	if (*GetOptions().Gameplay.storeUi == StoreUi::VisualGrid) {
 		AddVisualStoreMenuEntry(14, _("Buy / Sell"), VisualStoreVendor::Witch);
@@ -1081,7 +1154,7 @@ void StartBoy()
 	HasScrollbar = false;
 	AddSText(0, 2, _("Wirt the Peg-legged boy"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSLine(5);
-	BeginTownerMenu();
+	BeginTownerMenu(BoyMenuMinLine);
 	if (!BoyItem.isEmpty()) {
 		const UiFlags LabelFlags = UiFlags::ColorWhitegold | UiFlags::AlignCenter;
 		AddTalkMenuEntry(8, _("Talk to Wirt"), TOWN_PEGBOY, TalkID::Boy);
@@ -1144,7 +1217,7 @@ void StartHealer()
 	AddSText(0, 1, _("Welcome to the"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSText(0, 3, _("Healer's home"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSText(0, 9, _("Would you like to:"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
-	BeginTownerMenu();
+	BeginTownerMenu(DefaultMenuMinLine);
 	AddTalkMenuEntry(12, _("Talk to Pepin"), TOWN_HEALER, TalkID::Healer);
 	if (*GetOptions().Gameplay.storeUi == StoreUi::VisualGrid) {
 		AddVisualStoreMenuEntry(14, _("Buy items"), VisualStoreVendor::Healer);
@@ -1189,7 +1262,7 @@ void StartStoryteller()
 	HasScrollbar = false;
 	AddSText(0, 2, _("The Town Elder"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSText(0, 9, _("Would you like to:"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
-	BeginTownerMenu();
+	BeginTownerMenu(DefaultMenuMinLine);
 	AddTalkMenuEntry(12, _("Talk to Cain"), TOWN_STORY, TalkID::Storyteller);
 	AddStoreMenuEntry(14, _("Identify an item"), TalkID::StorytellerIdentify);
 	AddLeaveMenuEntry(18, _("Say goodbye"));
@@ -1366,7 +1439,7 @@ void StartTavern()
 	AddSText(0, 1, _("Welcome to the"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSText(0, 3, _("Rising Sun"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSText(0, 9, _("Would you like to:"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
-	BeginTownerMenu();
+	BeginTownerMenu(DefaultMenuMinLine);
 	AddTalkMenuEntry(12, _("Talk to Ogden"), TOWN_TAVERN, TalkID::Tavern);
 	AddLeaveMenuEntry(18, _("Leave the tavern"));
 	AddSLine(5);
@@ -1392,7 +1465,7 @@ void StartBarmaid()
 	HasScrollbar = false;
 	AddSText(0, 2, _("Gillian"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSText(0, 9, _("Would you like to:"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
-	BeginTownerMenu();
+	BeginTownerMenu(DefaultMenuMinLine);
 	AddTalkMenuEntry(12, _("Talk to Gillian"), TOWN_BMAID, TalkID::Barmaid);
 	AddMenuEntry(14, _("Access Storage"), UiFlags::ColorWhite | UiFlags::AlignCenter, true, OpenStashAction);
 	AddLeaveMenuEntry(18, _("Say goodbye"));
@@ -1406,7 +1479,7 @@ void StartDrunk()
 	HasScrollbar = false;
 	AddSText(0, 2, _("Farnham the Drunk"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSText(0, 9, _("Would you like to:"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
-	BeginTownerMenu();
+	BeginTownerMenu(DefaultMenuMinLine);
 	AddTalkMenuEntry(12, _("Talk to Farnham"), TOWN_DRUNK, TalkID::Drunk);
 	AddLeaveMenuEntry(18, _("Say Goodbye"));
 	AddSLine(5);
@@ -2301,39 +2374,10 @@ void StartStore(TalkID s)
 	}
 
 	// A top-level towner menu was built by one of the Start* functions above.
+	// Entries are added to TextLine here, together with the mod options.
 	// A menu that is already applied belongs to a nested StartStore call.
 	if (!ActiveTownerMenu.entries.empty() && ActiveTownerMenu.store == TalkID::None) {
 		ApplyTownerMenu(s);
-	}
-
-	std::fill(std::begin(CurrentExtraOptionIndices), std::end(CurrentExtraOptionIndices), std::nullopt);
-	if (const char *extraTownerName = TownerNameForTalkID(s); extraTownerName != nullptr) {
-		if (auto *extraOpts = FindExtraTownerOptions(extraTownerName); extraOpts != nullptr) {
-			// Find the last selectable line (the "leave"/"say goodbye" option).
-			int lastSelectableLine = -1;
-			for (int i = NumStoreLines - 1; i >= 0; --i) {
-				if (TextLine[i].isSelectable()) {
-					lastSelectableLine = i;
-					break;
-				}
-			}
-
-			// Insert extra options into empty even-numbered lines before the leave option.
-			size_t optIdx = 0;
-			for (int line = 10; line < lastSelectableLine && optIdx < extraOpts->size(); line += 2) {
-				if (TextLine[line].hasText()) continue;
-				std::string label = (*extraOpts)[optIdx].getLabel();
-				if (!label.empty()) {
-					AddSText(0, line, label, UiFlags::ColorWhite | UiFlags::AlignCenter, true);
-					CurrentExtraOptionIndices[line] = optIdx;
-				}
-				++optIdx;
-			}
-			if (optIdx < extraOpts->size()) {
-				LogWarn("Towner \"{}\" dialog: {} extra option(s) could not be placed (no empty lines)",
-				    extraTownerName, extraOpts->size() - optIdx);
-			}
-		}
 	}
 
 	CurrentTextLine = -1;
@@ -2614,21 +2658,6 @@ void StoreEnter()
 	}
 
 	PlaySFX(SfxID::MenuSelect);
-
-	if (CurrentTextLine >= 0 && CurrentTextLine < NumStoreLines && CurrentExtraOptionIndices[CurrentTextLine].has_value()) {
-		size_t optIdx = *CurrentExtraOptionIndices[CurrentTextLine];
-		if (const char *townerName = TownerNameForTalkID(ActiveStore); townerName != nullptr) {
-			if (auto *extraOpts = FindExtraTownerOptions(townerName); extraOpts != nullptr && optIdx < extraOpts->size()) {
-				ActiveStore = TalkID::None;
-				(*extraOpts)[optIdx].onSelect();
-				// If onSelect() set ActiveStore (e.g. to open a sub-dialog), preserve it.
-				// Otherwise it stays TalkID::None (dialog closed).
-				return;
-			}
-		}
-		ActiveStore = TalkID::None;
-		return;
-	}
 
 	switch (ActiveStore) {
 	case TalkID::Smith:

@@ -119,6 +119,11 @@ struct TownerDialogOption {
 /** Extra dialog options injected by mods, keyed by towner short name. */
 extern DVL_API_FOR_TEST std::vector<std::pair<std::string, std::vector<TownerDialogOption>>> ExtraTownerOptions;
 
+/** Distance between two consecutive entries of a towner menu, in text lines. */
+constexpr int TownerMenuLineStep = 2;
+/** Last text line a towner menu entry may use. */
+constexpr int TownerMenuMaxLine = 20;
+
 /** A row of a top-level towner menu. */
 struct TownerMenuEntry {
 	/** Text line the row is drawn on. */
@@ -132,15 +137,28 @@ struct TownerMenuEntry {
 };
 
 /**
- * @brief Ordered rows of a top-level towner menu (Talk, built-in options, Leave).
+ * @brief Ordered rows of a top-level towner menu (Talk, built-in options, mod options, Leave).
  *
  * The last entry is always the "leave" entry.
  */
 struct TownerMenu {
 	/** Store this menu belongs to. */
 	TalkID store = TalkID::None;
+	/** First text line the entries may be moved up to (the line below the last header row). */
+	int minLine = 0;
 	std::vector<TownerMenuEntry> entries;
 };
+
+/**
+ * @brief Inserts extra entries right after the last built-in entry (before the leave entry).
+ *
+ * Free lines between the built-in entries and the leave entry are used first. When they run out,
+ * the built-in entries move up towards TownerMenu::minLine, and then the leave entry moves down
+ * towards TownerMenuMaxLine. Entries that still do not fit are dropped.
+ *
+ * @return The number of extra entries that did not fit.
+ */
+DVL_API_FOR_TEST size_t PlaceExtraMenuEntries(TownerMenu &menu, std::vector<TownerMenuEntry> extras);
 
 /**
  * @brief Returns the towner short name for a top-level TalkID, or nullptr if not a towner store.
@@ -153,9 +171,9 @@ DVL_API_FOR_TEST const char *TownerNameForTalkID(TalkID s);
 /**
  * @brief Registers a dynamic dialog option for a towner's talk menu.
  *
- * Options are inserted into empty even-numbered lines before the towner's "leave" option.
- * If no empty lines are available the option is silently skipped for that dialog session
- * and a warning is logged.
+ * Options appear in registration order directly below the towner's built-in options and above
+ * the "leave" option. The menu grows to make room (see PlaceExtraMenuEntries). If it still does
+ * not fit, the remaining options are skipped for that dialog session and a warning is logged.
  *
  * When the player selects a mod option, onSelect() is called. By default the dialog is
  * closed afterwards. If onSelect() sets ActiveStore to a value other than TalkID::None,
