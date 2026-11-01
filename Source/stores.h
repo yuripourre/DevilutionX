@@ -119,6 +119,29 @@ struct TownerDialogOption {
 /** Extra dialog options injected by mods, keyed by towner short name. */
 extern DVL_API_FOR_TEST std::vector<std::pair<std::string, std::vector<TownerDialogOption>>> ExtraTownerOptions;
 
+/** A row of a top-level towner menu. */
+struct TownerMenuEntry {
+	/** Text line the row is drawn on. */
+	int line;
+	std::string text;
+	UiFlags flags;
+	/** Non-selectable entries are plain labels. */
+	bool selectable;
+	/** Called when the player picks the entry. Unused for labels. */
+	std::function<void()> onSelect;
+};
+
+/**
+ * @brief Ordered rows of a top-level towner menu (Talk, built-in options, Leave).
+ *
+ * The last entry is always the "leave" entry.
+ */
+struct TownerMenu {
+	/** Store this menu belongs to. */
+	TalkID store = TalkID::None;
+	std::vector<TownerMenuEntry> entries;
+};
+
 /**
  * @brief Returns the towner short name for a top-level TalkID, or nullptr if not a towner store.
  *

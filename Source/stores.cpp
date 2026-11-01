@@ -132,10 +132,39 @@ void RegisterTownerDialogOption(std::string_view townerName,
  */
 static std::optional<size_t> CurrentExtraOptionIndices[NumStoreLines];
 
+/** The top-level towner menu currently being displayed (if any). */
+static TownerMenu ActiveTownerMenu;
+
+/** Index into ActiveTownerMenu.entries to re-select when returning to a towner menu. */
+static size_t OldMenuEntry = 0;
+
 void ClearTownerDialogOptions()
 {
 	ExtraTownerOptions.clear();
 	std::fill(std::begin(CurrentExtraOptionIndices), std::end(CurrentExtraOptionIndices), std::nullopt);
+}
+
+/** Index of the selected entry in the active towner menu, if the menu is showing and has a selection. */
+static std::optional<size_t> SelectedMenuEntry()
+{
+	if (ActiveTownerMenu.store != ActiveStore)
+		return std::nullopt;
+	for (size_t i = 0; i < ActiveTownerMenu.entries.size(); ++i) {
+		const TownerMenuEntry &entry = ActiveTownerMenu.entries[i];
+		if (entry.selectable && entry.line == CurrentTextLine)
+			return i;
+	}
+	return std::nullopt;
+}
+
+/** Re-selects what was selected before leaving the current store page for a sub page. */
+static void RestoreOldSelection()
+{
+	if (ActiveTownerMenu.store != ActiveStore) {
+		CurrentTextLine = OldTextLine;
+	} else if (OldMenuEntry < ActiveTownerMenu.entries.size()) {
+		CurrentTextLine = ActiveTownerMenu.entries[OldMenuEntry].line;
+	}
 }
 
 namespace {
@@ -331,6 +360,61 @@ void AddSText(uint8_t x, size_t y, std::string_view text, UiFlags flags, bool se
 	TextLine[y].cursIndent = cursIndent;
 }
 
+/** Starts building a top-level towner menu. The entries are drawn by ApplyTownerMenu. */
+void BeginTownerMenu()
+{
+	ActiveTownerMenu = {};
+}
+
+void AddMenuEntry(int line, std::string_view text, UiFlags flags, bool selectable, std::function<void()> onSelect = {})
+{
+	ActiveTownerMenu.entries.push_back({ line, std::string(text), flags, selectable, std::move(onSelect) });
+}
+
+/** Adds the "Talk to <towner>" entry that opens the gossip page and remembers where to come back to. */
+void AddTalkMenuEntry(int line, std::string_view text, _talker_id townerId, TalkID store)
+{
+	AddMenuEntry(line, text, UiFlags::ColorBlue | UiFlags::AlignCenter, true,
+	    [townerId, store]() {
+		    TownerId = townerId;
+		    OldActiveStore = store;
+		    StartStore(TalkID::Gossip);
+	    });
+}
+
+/** Adds the final entry of a menu, which closes the dialog. */
+void AddLeaveMenuEntry(int line, std::string_view text)
+{
+	AddMenuEntry(line, text, UiFlags::ColorWhite | UiFlags::AlignCenter, true, []() { ActiveStore = TalkID::None; });
+}
+
+/** Adds an entry that switches to another store page. */
+void AddStoreMenuEntry(int line, std::string_view text, TalkID target)
+{
+	AddMenuEntry(line, text, UiFlags::ColorWhite | UiFlags::AlignCenter, true, [target]() { StartStore(target); });
+}
+
+/** Adds an entry that closes the dialog and opens the visual store of a vendor. */
+void AddVisualStoreMenuEntry(int line, std::string_view text, VisualStoreVendor vendor)
+{
+	AddMenuEntry(line, text, UiFlags::ColorWhite | UiFlags::AlignCenter, true, [vendor]() {
+		ActiveStore = TalkID::None;
+		OpenVisualStore(vendor);
+	});
+}
+
+/** Draws the entries of the menu being built into TextLine. */
+void ApplyTownerMenu(TalkID store)
+{
+	ActiveTownerMenu.store = store;
+	for (const TownerMenuEntry &entry : ActiveTownerMenu.entries) {
+		AddSText(0, entry.line, entry.text, entry.flags, entry.selectable);
+	}
+}
+
+/** Every top-level menu starts with "Talk to <towner>". */
+constexpr size_t TalkMenuEntry = 0;
+
 void AddOptionsBackButton()
 {
 	const int line = BackButtonLine();
@@ -436,16 +520,17 @@ void StartSmith()
 	AddSText(0, 1, _("Welcome to the"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSText(0, 3, _("Blacksmith's shop"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSText(0, 7, _("Would you like to:"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
-	AddSText(0, 10, _("Talk to Griswold"), UiFlags::ColorBlue | UiFlags::AlignCenter, true);
+	BeginTownerMenu();
+	AddTalkMenuEntry(10, _("Talk to Griswold"), TOWN_SMITH, TalkID::Smith);
 	if (*GetOptions().Gameplay.storeUi == StoreUi::VisualGrid) {
-		AddSText(0, 12, _("Trade / Repair"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
-		AddSText(0, 14, _("Leave the shop"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
+		AddVisualStoreMenuEntry(12, _("Trade / Repair"), VisualStoreVendor::Smith);
+		AddLeaveMenuEntry(14, _("Leave the shop"));
 	} else {
-		AddSText(0, 12, _("Buy basic items"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
-		AddSText(0, 14, _("Buy premium items"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
-		AddSText(0, 16, _("Sell items"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
-		AddSText(0, 18, _("Repair items"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
-		AddSText(0, 20, _("Leave the shop"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
+		AddStoreMenuEntry(12, _("Buy basic items"), TalkID::SmithBuy);
+		AddStoreMenuEntry(14, _("Buy premium items"), TalkID::SmithPremiumBuy);
+		AddStoreMenuEntry(16, _("Sell items"), TalkID::SmithSell);
+		AddStoreMenuEntry(18, _("Repair items"), TalkID::SmithRepair);
+		AddLeaveMenuEntry(20, _("Leave the shop"));
 	}
 	AddSLine(5);
 	CurrentItemIndex = 20;
@@ -502,7 +587,7 @@ bool StartSmithPremiumBuy()
 	}
 	if (CurrentItemIndex == 0) {
 		StartStore(TalkID::Smith);
-		CurrentTextLine = 14;
+		RestoreOldSelection();
 		return false;
 	}
 
@@ -693,17 +778,18 @@ void StartWitch()
 	HasScrollbar = false;
 	AddSText(0, 2, _("Witch's shack"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSText(0, 9, _("Would you like to:"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
-	AddSText(0, 12, _("Talk to Adria"), UiFlags::ColorBlue | UiFlags::AlignCenter, true);
+	BeginTownerMenu();
+	AddTalkMenuEntry(12, _("Talk to Adria"), TOWN_WITCH, TalkID::Witch);
 	if (*GetOptions().Gameplay.storeUi == StoreUi::VisualGrid) {
-		AddSText(0, 14, _("Buy / Sell"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
-		AddSText(0, 16, _("Recharge staves"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
-		AddSText(0, 18, _("Leave the shack"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
+		AddVisualStoreMenuEntry(14, _("Buy / Sell"), VisualStoreVendor::Witch);
+		AddStoreMenuEntry(16, _("Recharge staves"), TalkID::WitchRecharge);
+		AddLeaveMenuEntry(18, _("Leave the shack"));
 		AddSLine(4);
 	} else {
-		AddSText(0, 14, _("Buy items"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
-		AddSText(0, 16, _("Sell items"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
-		AddSText(0, 18, _("Recharge staves"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
-		AddSText(0, 20, _("Leave the shack"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
+		AddStoreMenuEntry(14, _("Buy items"), TalkID::WitchBuy);
+		AddStoreMenuEntry(16, _("Sell items"), TalkID::WitchSell);
+		AddStoreMenuEntry(18, _("Recharge staves"), TalkID::WitchRecharge);
+		AddLeaveMenuEntry(20, _("Leave the shack"));
 		AddSLine(5);
 	}
 
@@ -968,22 +1054,45 @@ void StoreConfirm(Item &item)
 	AddSText(0, 20, _("No"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
 }
 
+/** Price Wirt charges for just looking at his item. */
+constexpr int BoyLookPrice = 50;
+
+void BoyLookAtItemAction()
+{
+	if (!PlayerCanAfford(BoyLookPrice)) {
+		OldActiveStore = TalkID::Boy;
+		OldScrollPos = ScrollPos;
+		StartStore(TalkID::NoMoney);
+		return;
+	}
+
+	TakePlrsMoney(BoyLookPrice);
+	if (*GetOptions().Gameplay.storeUi == StoreUi::VisualGrid) {
+		ActiveStore = TalkID::None;
+		OpenVisualStore(VisualStoreVendor::Boy);
+	} else {
+		StartStore(TalkID::BoyBuy);
+	}
+}
+
 void StartBoy()
 {
 	IsTextFullSize = false;
 	HasScrollbar = false;
 	AddSText(0, 2, _("Wirt the Peg-legged boy"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSLine(5);
+	BeginTownerMenu();
 	if (!BoyItem.isEmpty()) {
-		AddSText(0, 8, _("Talk to Wirt"), UiFlags::ColorBlue | UiFlags::AlignCenter, true);
-		AddSText(0, 12, _("I have something for sale,"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
-		AddSText(0, 14, _("but it will cost 50 gold"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
-		AddSText(0, 16, _("just to take a look. "), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
-		AddSText(0, 18, _("What have you got?"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
-		AddSText(0, 20, _("Say goodbye"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
+		const UiFlags LabelFlags = UiFlags::ColorWhitegold | UiFlags::AlignCenter;
+		AddTalkMenuEntry(8, _("Talk to Wirt"), TOWN_PEGBOY, TalkID::Boy);
+		AddMenuEntry(12, _("I have something for sale,"), LabelFlags, false);
+		AddMenuEntry(14, _("but it will cost 50 gold"), LabelFlags, false);
+		AddMenuEntry(16, _("just to take a look. "), LabelFlags, false);
+		AddMenuEntry(18, _("What have you got?"), UiFlags::ColorWhite | UiFlags::AlignCenter, true, BoyLookAtItemAction);
+		AddLeaveMenuEntry(20, _("Say goodbye"));
 	} else {
-		AddSText(0, 12, _("Talk to Wirt"), UiFlags::ColorBlue | UiFlags::AlignCenter, true);
-		AddSText(0, 18, _("Say goodbye"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
+		AddTalkMenuEntry(12, _("Talk to Wirt"), TOWN_PEGBOY, TalkID::Boy);
+		AddLeaveMenuEntry(18, _("Say goodbye"));
 	}
 }
 
@@ -1035,9 +1144,14 @@ void StartHealer()
 	AddSText(0, 1, _("Welcome to the"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSText(0, 3, _("Healer's home"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSText(0, 9, _("Would you like to:"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
-	AddSText(0, 12, _("Talk to Pepin"), UiFlags::ColorBlue | UiFlags::AlignCenter, true);
-	AddSText(0, 14, _("Buy items"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
-	AddSText(0, 18, _("Leave Healer's home"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
+	BeginTownerMenu();
+	AddTalkMenuEntry(12, _("Talk to Pepin"), TOWN_HEALER, TalkID::Healer);
+	if (*GetOptions().Gameplay.storeUi == StoreUi::VisualGrid) {
+		AddVisualStoreMenuEntry(14, _("Buy items"), VisualStoreVendor::Healer);
+	} else {
+		AddStoreMenuEntry(14, _("Buy items"), TalkID::HealerBuy);
+	}
+	AddLeaveMenuEntry(18, _("Leave Healer's home"));
 	AddSLine(5);
 	CurrentItemIndex = 20;
 }
@@ -1075,9 +1189,10 @@ void StartStoryteller()
 	HasScrollbar = false;
 	AddSText(0, 2, _("The Town Elder"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSText(0, 9, _("Would you like to:"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
-	AddSText(0, 12, _("Talk to Cain"), UiFlags::ColorBlue | UiFlags::AlignCenter, true);
-	AddSText(0, 14, _("Identify an item"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
-	AddSText(0, 18, _("Say goodbye"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
+	BeginTownerMenu();
+	AddTalkMenuEntry(12, _("Talk to Cain"), TOWN_STORY, TalkID::Storyteller);
+	AddStoreMenuEntry(14, _("Identify an item"), TalkID::StorytellerIdentify);
+	AddLeaveMenuEntry(18, _("Say goodbye"));
 	AddSLine(5);
 }
 
@@ -1251,10 +1366,24 @@ void StartTavern()
 	AddSText(0, 1, _("Welcome to the"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSText(0, 3, _("Rising Sun"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSText(0, 9, _("Would you like to:"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
-	AddSText(0, 12, _("Talk to Ogden"), UiFlags::ColorBlue | UiFlags::AlignCenter, true);
-	AddSText(0, 18, _("Leave the tavern"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
+	BeginTownerMenu();
+	AddTalkMenuEntry(12, _("Talk to Ogden"), TOWN_TAVERN, TalkID::Tavern);
+	AddLeaveMenuEntry(18, _("Leave the tavern"));
 	AddSLine(5);
 	CurrentItemIndex = 20;
+}
+
+void OpenStashAction()
+{
+	ActiveStore = TalkID::None;
+	IsStashOpen = true;
+	Stash.RefreshItemStatFlags();
+	invflag = true;
+	if (ControlMode != ControlTypes::KeyboardAndMouse) {
+		if (pcurs == CURSOR_DISARM)
+			NewCursor(CURSOR_HAND);
+		FocusOnInventory();
+	}
 }
 
 void StartBarmaid()
@@ -1263,9 +1392,10 @@ void StartBarmaid()
 	HasScrollbar = false;
 	AddSText(0, 2, _("Gillian"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSText(0, 9, _("Would you like to:"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
-	AddSText(0, 12, _("Talk to Gillian"), UiFlags::ColorBlue | UiFlags::AlignCenter, true);
-	AddSText(0, 14, _("Access Storage"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
-	AddSText(0, 18, _("Say goodbye"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
+	BeginTownerMenu();
+	AddTalkMenuEntry(12, _("Talk to Gillian"), TOWN_BMAID, TalkID::Barmaid);
+	AddMenuEntry(14, _("Access Storage"), UiFlags::ColorWhite | UiFlags::AlignCenter, true, OpenStashAction);
+	AddLeaveMenuEntry(18, _("Say goodbye"));
 	AddSLine(5);
 	CurrentItemIndex = 20;
 }
@@ -1276,56 +1406,11 @@ void StartDrunk()
 	HasScrollbar = false;
 	AddSText(0, 2, _("Farnham the Drunk"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSText(0, 9, _("Would you like to:"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
-	AddSText(0, 12, _("Talk to Farnham"), UiFlags::ColorBlue | UiFlags::AlignCenter, true);
-	AddSText(0, 18, _("Say Goodbye"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
+	BeginTownerMenu();
+	AddTalkMenuEntry(12, _("Talk to Farnham"), TOWN_DRUNK, TalkID::Drunk);
+	AddLeaveMenuEntry(18, _("Say Goodbye"));
 	AddSLine(5);
 	CurrentItemIndex = 20;
-}
-
-void SmithEnter()
-{
-	if (*GetOptions().Gameplay.storeUi == StoreUi::VisualGrid) {
-		switch (CurrentTextLine) {
-		case 10:
-			TownerId = TOWN_SMITH;
-			OldTextLine = 10;
-			OldActiveStore = TalkID::Smith;
-			StartStore(TalkID::Gossip);
-			break;
-		case 12:
-			ActiveStore = TalkID::None;
-			OpenVisualStore(VisualStoreVendor::Smith);
-			break;
-		case 14:
-			ActiveStore = TalkID::None;
-			break;
-		}
-		return;
-	}
-
-	switch (CurrentTextLine) {
-	case 10:
-		TownerId = TOWN_SMITH;
-		OldTextLine = 10;
-		OldActiveStore = TalkID::Smith;
-		StartStore(TalkID::Gossip);
-		break;
-	case 12:
-		StartStore(TalkID::SmithBuy);
-		break;
-	case 14:
-		StartStore(TalkID::SmithPremiumBuy);
-		break;
-	case 16:
-		StartStore(TalkID::SmithSell);
-		break;
-	case 18:
-		StartStore(TalkID::SmithRepair);
-		break;
-	case 20:
-		ActiveStore = TalkID::None;
-		break;
-	}
 }
 
 /**
@@ -1346,7 +1431,7 @@ void SmithBuyEnter()
 {
 	if (CurrentTextLine == BackButtonLine()) {
 		StartStore(TalkID::Smith);
-		CurrentTextLine = 12;
+		RestoreOldSelection();
 		return;
 	}
 
@@ -1387,7 +1472,7 @@ void SmithPremiumBuyEnter()
 {
 	if (CurrentTextLine == BackButtonLine()) {
 		StartStore(TalkID::Smith);
-		CurrentTextLine = 14;
+		RestoreOldSelection();
 		return;
 	}
 
@@ -1457,7 +1542,7 @@ void SmithSellEnter()
 {
 	if (CurrentTextLine == BackButtonLine()) {
 		StartStore(TalkID::Smith);
-		CurrentTextLine = 16;
+		RestoreOldSelection();
 		return;
 	}
 
@@ -1509,7 +1594,7 @@ void SmithRepairEnter()
 {
 	if (CurrentTextLine == BackButtonLine()) {
 		StartStore(TalkID::Smith);
-		CurrentTextLine = 18;
+		RestoreOldSelection();
 		return;
 	}
 
@@ -1526,52 +1611,6 @@ void SmithRepairEnter()
 
 	TempItem = PlayerItems[idx];
 	StartStore(TalkID::Confirm);
-}
-
-void WitchEnter()
-{
-	if (*GetOptions().Gameplay.storeUi == StoreUi::VisualGrid) {
-		switch (CurrentTextLine) {
-		case 12:
-			OldTextLine = 12;
-			TownerId = TOWN_WITCH;
-			OldActiveStore = TalkID::Witch;
-			StartStore(TalkID::Gossip);
-			break;
-		case 14:
-			ActiveStore = TalkID::None;
-			OpenVisualStore(VisualStoreVendor::Witch);
-			break;
-		case 16:
-			StartStore(TalkID::WitchRecharge);
-			break;
-		case 18:
-			ActiveStore = TalkID::None;
-			break;
-		}
-		return;
-	}
-
-	switch (CurrentTextLine) {
-	case 12:
-		OldTextLine = 12;
-		TownerId = TOWN_WITCH;
-		OldActiveStore = TalkID::Witch;
-		StartStore(TalkID::Gossip);
-		break;
-	case 14:
-		StartStore(TalkID::WitchBuy);
-		break;
-	case 16:
-		StartStore(TalkID::WitchSell);
-		break;
-	case 18:
-		StartStore(TalkID::WitchRecharge);
-		break;
-	case 20:
-		ActiveStore = TalkID::None;
-		break;
-	}
 }
 
 /**
@@ -1598,7 +1637,7 @@ void WitchBuyEnter()
 {
 	if (CurrentTextLine == BackButtonLine()) {
 		StartStore(TalkID::Witch);
-		CurrentTextLine = 14;
+		RestoreOldSelection();
 		return;
 	}
 
@@ -1626,7 +1665,7 @@ void WitchSellEnter()
 {
 	if (CurrentTextLine == BackButtonLine()) {
 		StartStore(TalkID::Witch);
-		CurrentTextLine = 16;
+		RestoreOldSelection();
 		return;
 	}
 
@@ -1672,7 +1711,7 @@ void WitchRechargeEnter()
 {
 	if (CurrentTextLine == BackButtonLine()) {
 		StartStore(TalkID::Witch);
-		CurrentTextLine = *GetOptions().Gameplay.storeUi == StoreUi::VisualGrid ? 16 : 18;
+		RestoreOldSelection();
 		return;
 	}
 
@@ -1691,37 +1730,6 @@ void WitchRechargeEnter()
 	StartStore(TalkID::Confirm);
 }
 
-void BoyEnter()
-{
-	if (!BoyItem.isEmpty() && CurrentTextLine == 18) {
-		if (!PlayerCanAfford(50)) {
-			OldActiveStore = TalkID::Boy;
-			OldTextLine = 18;
-			OldScrollPos = ScrollPos;
-			StartStore(TalkID::NoMoney);
-		} else {
-			TakePlrsMoney(50);
-			if (*GetOptions().Gameplay.storeUi == StoreUi::VisualGrid) {
-				ActiveStore = TalkID::None;
-				OpenVisualStore(VisualStoreVendor::Boy);
-			} else {
-				StartStore(TalkID::BoyBuy);
-			}
-		}
-		return;
-	}
-
-	if ((CurrentTextLine != 8 && !BoyItem.isEmpty()) || (CurrentTextLine != 12 && BoyItem.isEmpty())) {
-		ActiveStore = TalkID::None;
-		return;
-	}
-
-	TownerId = TOWN_PEGBOY;
-	OldActiveStore = TalkID::Boy;
-	OldTextLine = CurrentTextLine;
-	StartStore(TalkID::Gossip);
-}
-
 void BoyBuyItem(Item &item, int itemPrice)
 {
 	TakePlrsMoney(itemPrice);
@@ -1729,7 +1737,8 @@ void BoyBuyItem(Item &item, int itemPrice)
 	item.clear();
 	OldActiveStore = TalkID::Boy;
 	CalcPlrInv(*MyPlayer, true);
-	OldTextLine = 12;
+	// The boy has nothing left to sell, so his menu only has the talk entry to go back to.
+	OldMenuEntry = TalkMenuEntry;
 }
 
 /**
@@ -1865,7 +1874,7 @@ void ConfirmEnter(Item &item)
 	if (CurrentTextLine == BackButtonLine())
 		return;
 
-	CurrentTextLine = OldTextLine;
+	RestoreOldSelection();
 	ScrollPos = std::min(OldScrollPos, NumTextLines);
 
 	while (CurrentTextLine != -1 && !TextLine[CurrentTextLine].isSelectable()) {
@@ -1873,34 +1882,11 @@ void ConfirmEnter(Item &item)
 	}
 }
 
-void HealerEnter()
-{
-	switch (CurrentTextLine) {
-	case 12:
-		OldTextLine = 12;
-		TownerId = TOWN_HEALER;
-		OldActiveStore = TalkID::Healer;
-		StartStore(TalkID::Gossip);
-		break;
-	case 14:
-		if (*GetOptions().Gameplay.storeUi == StoreUi::VisualGrid) {
-			ActiveStore = TalkID::None;
-			OpenVisualStore(VisualStoreVendor::Healer);
-		} else {
-			StartStore(TalkID::HealerBuy);
-		}
-		break;
-	case 18:
-		ActiveStore = TalkID::None;
-		break;
-	}
-}
-
 void HealerBuyEnter()
 {
 	if (CurrentTextLine == BackButtonLine()) {
 		StartStore(TalkID::Healer);
-		CurrentTextLine = 14;
+		RestoreOldSelection();
 		return;
 	}
 
@@ -1924,29 +1910,11 @@ void HealerBuyEnter()
 	StartStore(TalkID::Confirm);
 }
 
-void StorytellerEnter()
-{
-	switch (CurrentTextLine) {
-	case 12:
-		OldTextLine = 12;
-		TownerId = TOWN_STORY;
-		OldActiveStore = TalkID::Storyteller;
-		StartStore(TalkID::Gossip);
-		break;
-	case 14:
-		StartStore(TalkID::StorytellerIdentify);
-		break;
-	case 18:
-		ActiveStore = TalkID::None;
-		break;
-	}
-}
-
 void StorytellerIdentifyEnter()
 {
 	if (CurrentTextLine == BackButtonLine()) {
 		StartStore(TalkID::Storyteller);
-		CurrentTextLine = 14;
+		RestoreOldSelection();
 		return;
 	}
 
@@ -1969,7 +1937,7 @@ void TalkEnter()
 {
 	if (CurrentTextLine == BackButtonLine()) {
 		StartStore(OldActiveStore);
-		CurrentTextLine = OldTextLine;
+		RestoreOldSelection();
 		return;
 	}
 
@@ -2000,62 +1968,6 @@ void TalkEnter()
 			}
 			sn += la;
 		}
-	}
-}
-
-void TavernEnter()
-{
-	switch (CurrentTextLine) {
-	case 12:
-		OldTextLine = 12;
-		TownerId = TOWN_TAVERN;
-		OldActiveStore = TalkID::Tavern;
-		StartStore(TalkID::Gossip);
-		break;
-	case 18:
-		ActiveStore = TalkID::None;
-		break;
-	}
-}
-
-void BarmaidEnter()
-{
-	switch (CurrentTextLine) {
-	case 12:
-		OldTextLine = 12;
-		TownerId = TOWN_BMAID;
-		OldActiveStore = TalkID::Barmaid;
-		StartStore(TalkID::Gossip);
-		break;
-	case 14:
-		ActiveStore = TalkID::None;
-		IsStashOpen = true;
-		Stash.RefreshItemStatFlags();
-		invflag = true;
-		if (ControlMode != ControlTypes::KeyboardAndMouse) {
-			if (pcurs == CURSOR_DISARM)
-				NewCursor(CURSOR_HAND);
-			FocusOnInventory();
-		}
-		break;
-	case 18:
-		ActiveStore = TalkID::None;
-		break;
-	}
-}
-
-void DrunkEnter()
-{
-	switch (CurrentTextLine) {
-	case 12:
-		OldTextLine = 12;
-		TownerId = TOWN_DRUNK;
-		OldActiveStore = TalkID::Drunk;
-		StartStore(TalkID::Gossip);
-		break;
-	case 18:
-		ActiveStore = TalkID::None;
-		break;
 	}
 }
 
@@ -2296,6 +2208,7 @@ void StartStore(TalkID s)
 	QuestLogIsOpen = false;
 	CloseGoldDrop();
 	ClearSText(0, NumStoreLines);
+	ActiveTownerMenu = {};
 	ReleaseStoreBtn();
 
 	// Fire StoreOpened Lua event for main store entries
@@ -2385,6 +2298,12 @@ void StartStore(TalkID s)
 		break;
 	case TalkID::None:
 		break;
+	}
+
+	// A top-level towner menu was built by one of the Start* functions above.
+	// A menu that is already applied belongs to a nested StartStore call.
+	if (!ActiveTownerMenu.entries.empty() && ActiveTownerMenu.store == TalkID::None) {
+		ApplyTownerMenu(s);
 	}
 
 	std::fill(std::begin(CurrentExtraOptionIndices), std::end(CurrentExtraOptionIndices), std::nullopt);
@@ -2501,43 +2420,43 @@ void StoreESC()
 		break;
 	case TalkID::Gossip:
 		StartStore(OldActiveStore);
-		CurrentTextLine = OldTextLine;
+		RestoreOldSelection();
 		break;
 	case TalkID::SmithBuy:
 		StartStore(TalkID::Smith);
-		CurrentTextLine = 12;
+		RestoreOldSelection();
 		break;
 	case TalkID::SmithPremiumBuy:
 		StartStore(TalkID::Smith);
-		CurrentTextLine = 14;
+		RestoreOldSelection();
 		break;
 	case TalkID::SmithSell:
 		StartStore(TalkID::Smith);
-		CurrentTextLine = 16;
+		RestoreOldSelection();
 		break;
 	case TalkID::SmithRepair:
 		StartStore(TalkID::Smith);
-		CurrentTextLine = 18;
+		RestoreOldSelection();
 		break;
 	case TalkID::WitchBuy:
 		StartStore(TalkID::Witch);
-		CurrentTextLine = 14;
+		RestoreOldSelection();
 		break;
 	case TalkID::WitchSell:
 		StartStore(TalkID::Witch);
-		CurrentTextLine = 16;
+		RestoreOldSelection();
 		break;
 	case TalkID::WitchRecharge:
 		StartStore(TalkID::Witch);
-		CurrentTextLine = *GetOptions().Gameplay.storeUi == StoreUi::VisualGrid ? 16 : 18;
+		RestoreOldSelection();
 		break;
 	case TalkID::HealerBuy:
 		StartStore(TalkID::Healer);
-		CurrentTextLine = 14;
+		RestoreOldSelection();
 		break;
 	case TalkID::StorytellerIdentify:
 		StartStore(TalkID::Storyteller);
-		CurrentTextLine = 14;
+		RestoreOldSelection();
 		break;
 	case TalkID::StorytellerIdentifyShow:
 		StartStore(TalkID::StorytellerIdentify);
@@ -2546,7 +2465,7 @@ void StoreESC()
 	case TalkID::NoRoom:
 	case TalkID::Confirm:
 		StartStore(OldActiveStore);
-		CurrentTextLine = OldTextLine;
+		RestoreOldSelection();
 		ScrollPos = OldScrollPos;
 		break;
 	case TalkID::None:
@@ -2670,6 +2589,20 @@ void TakePlrsMoney(int cost)
 	Stash.dirty = true;
 }
 
+/** Runs the action of the selected entry of the active towner menu. */
+static void TownerMenuEnter()
+{
+	const std::optional<size_t> selected = SelectedMenuEntry();
+	if (!selected.has_value())
+		return;
+	// Copy the action: it may start another store, which replaces the menu it is stored in.
+	const std::function<void()> onSelect = ActiveTownerMenu.entries[*selected].onSelect;
+	// Sub pages and the gossip page return to this entry.
+	OldMenuEntry = *selected;
+	if (onSelect)
+		onSelect();
+}
+
 void StoreEnter()
 {
 	if (qtextflag) {
@@ -2699,7 +2632,14 @@ void StoreEnter()
 
 	switch (ActiveStore) {
 	case TalkID::Smith:
-		SmithEnter();
+	case TalkID::Witch:
+	case TalkID::Boy:
+	case TalkID::Healer:
+	case TalkID::Storyteller:
+	case TalkID::Tavern:
+	case TalkID::Drunk:
+	case TalkID::Barmaid:
+		TownerMenuEnter();
 		break;
 	case TalkID::SmithPremiumBuy:
 		SmithPremiumBuyEnter();
@@ -2713,9 +2653,6 @@ void StoreEnter()
 	case TalkID::SmithRepair:
 		SmithRepairEnter();
 		break;
-	case TalkID::Witch:
-		WitchEnter();
-		break;
 	case TalkID::WitchBuy:
 		WitchBuyEnter();
 		break;
@@ -2728,23 +2665,14 @@ void StoreEnter()
 	case TalkID::NoMoney:
 	case TalkID::NoRoom:
 		StartStore(OldActiveStore);
-		CurrentTextLine = OldTextLine;
+		RestoreOldSelection();
 		ScrollPos = OldScrollPos;
 		break;
 	case TalkID::Confirm:
 		ConfirmEnter(TempItem);
 		break;
-	case TalkID::Boy:
-		BoyEnter();
-		break;
 	case TalkID::BoyBuy:
 		BoyBuyEnter();
-		break;
-	case TalkID::Healer:
-		HealerEnter();
-		break;
-	case TalkID::Storyteller:
-		StorytellerEnter();
 		break;
 	case TalkID::HealerBuy:
 		HealerBuyEnter();
@@ -2757,15 +2685,6 @@ void StoreEnter()
 		break;
 	case TalkID::StorytellerIdentifyShow:
 		StartStore(TalkID::StorytellerIdentify);
-		break;
-	case TalkID::Drunk:
-		DrunkEnter();
-		break;
-	case TalkID::Tavern:
-		TavernEnter();
-		break;
-	case TalkID::Barmaid:
-		BarmaidEnter();
 		break;
 	case TalkID::None:
 		break;
