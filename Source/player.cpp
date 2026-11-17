@@ -16,6 +16,7 @@
 
 #include "control/control.hpp"
 #include "controls/control_mode.hpp"
+#include "controls/local_coop/local_coop.hpp"
 #include "controls/plrctrls.h"
 #include "cursor.h"
 #include "dead.h"
@@ -160,7 +161,7 @@ void ClearStateVariables(Player &player)
 
 void StartAttack(Player &player, Direction d, bool includesFirstFrame)
 {
-	if (player._pInvincible && player.hasNoLife() && &player == MyPlayer) {
+	if (player._pInvincible && player.hasNoLife() && IsLocalPlayer(player)) {
 		SyncPlrKill(player, DeathReason::Unknown);
 		return;
 	}
@@ -192,7 +193,7 @@ void StartAttack(Player &player, Direction d, bool includesFirstFrame)
 
 void StartRangeAttack(Player &player, Direction d, WorldTileCoord cx, WorldTileCoord cy, bool includesFirstFrame)
 {
-	if (player._pInvincible && player.hasNoLife() && &player == MyPlayer) {
+	if (player._pInvincible && player.hasNoLife() && IsLocalPlayer(player)) {
 		SyncPlrKill(player, DeathReason::Unknown);
 		return;
 	}
@@ -234,7 +235,7 @@ player_graphic GetPlayerGraphicForSpell(SpellID spellId)
 
 void StartSpell(Player &player, Direction d, WorldTileCoord cx, WorldTileCoord cy)
 {
-	if (player._pInvincible && player.hasNoLife() && &player == MyPlayer) {
+	if (player._pInvincible && player.hasNoLife() && IsLocalPlayer(player)) {
 		SyncPlrKill(player, DeathReason::Unknown);
 		return;
 	}
@@ -578,7 +579,8 @@ bool PlrHitMonst(Player &player, Monster &monster, bool adjacentDamage = false)
 	if (adjacentDamage)
 		dam >>= 2;
 
-	if (&player == MyPlayer) {
+	// Local players (MyPlayer and local coop players) apply damage locally
+	if (IsLocalPlayer(player)) {
 		if (HasAnyOf(player.pDamAcFlags, ItemSpecialEffectHf::Peril)) {
 			dam2 += player._pIGetHit << 6;
 			if (dam2 >= 0) {
@@ -709,7 +711,7 @@ bool PlrHitPlr(Player &attacker, Player &target)
 		}
 		RedrawComponent(PanelDrawComponent::Health);
 	}
-	if (&attacker == MyPlayer) {
+	if (IsLocalPlayer(attacker)) {
 		NetSendCmdDamage(true, target, skdam.raw(), DamageType::Physical);
 	}
 	StartPlrHit(target, skdam, false);
@@ -987,7 +989,7 @@ bool DoDeath(Player &player)
 		if (player.AnimInfo.tickCounterOfCurrentFrame == 0) {
 			player.AnimInfo.ticksPerFrame = 100;
 			dFlags[player.position.tile.x][player.position.tile.y] |= DungeonFlag::DeadPlayer;
-		} else if (&player == MyPlayer && player.AnimInfo.tickCounterOfCurrentFrame == 30) {
+		} else if (IsLocalPlayer(player) && player.AnimInfo.tickCounterOfCurrentFrame == 30) {
 			MyPlayerIsDead = true;
 		}
 	}
@@ -997,7 +999,7 @@ bool DoDeath(Player &player)
 
 void TryDisarm(const Player &player, Object &object)
 {
-	if (&player == MyPlayer)
+	if (IsLocalPlayer(player))
 		NewCursor(CURSOR_HAND);
 	if (!object._oTrapFlag) {
 		return;
@@ -1069,7 +1071,7 @@ void CheckNewPath(Player &player, bool pmWillBeCalled)
 	Direction d;
 	if (player.walkpath[0] != WALK_NONE) {
 		if (player._pmode == PM_STAND) {
-			if (&player == MyPlayer) {
+			if (IsLocalPlayer(player)) {
 				if (player.destAction == ACTION_ATTACKMON || player.destAction == ACTION_ATTACKPLR) {
 					if (player.destAction == ACTION_ATTACKMON) {
 						x = std::abs(player.position.future.x - monster->position.future.x);
@@ -1223,26 +1225,30 @@ void CheckNewPath(Player &player, bool pmWillBeCalled)
 			}
 			break;
 		case ACTION_PICKUPITEM:
-			if (&player == MyPlayer) {
+			if (IsLocalPlayer(player)) {
 				x = std::abs(player.position.tile.x - item->position.x);
 				y = std::abs(player.position.tile.y - item->position.y);
-				if (x <= 1 && y <= 1 && pcurs == CURSOR_HAND && !item->_iRequest) {
+				// For local co-op players, we always use CURSOR_HAND since they have their own cursor state
+				const bool canPickup = (&player == MyPlayer) ? (pcurs == CURSOR_HAND) : true;
+				if (x <= 1 && y <= 1 && canPickup && !item->_iRequest) {
 					NetSendCmdGItem(true, CMD_REQUESTGITEM, player, targetId);
 					item->_iRequest = true;
 				}
 			}
 			break;
 		case ACTION_PICKUPAITEM:
-			if (&player == MyPlayer) {
+			if (IsLocalPlayer(player)) {
 				x = std::abs(player.position.tile.x - item->position.x);
 				y = std::abs(player.position.tile.y - item->position.y);
-				if (x <= 1 && y <= 1 && pcurs == CURSOR_HAND) {
+				// For local co-op players, we always use CURSOR_HAND since they have their own cursor state
+				const bool canPickup = (&player == MyPlayer) ? (pcurs == CURSOR_HAND) : true;
+				if (x <= 1 && y <= 1 && canPickup) {
 					NetSendCmdGItem(true, CMD_REQUESTAGITEM, player, targetId);
 				}
 			}
 			break;
 		case ACTION_TALK:
-			if (&player == MyPlayer) {
+			if (IsLocalPlayer(player)) {
 				HelpFlag = false;
 				TalkToTowner(player, player.destParam1);
 			}
@@ -1459,20 +1465,6 @@ void GetPlayerGraphicsPath(std::string_view path, std::string_view prefix, std::
 
 } // namespace
 
-/**
- * @brief Start moving a player to a new tile
- */
-void StartWalk(Player &player, Direction dir, bool pmWillBeCalled)
-{
-	if (player._pInvincible && player.hasNoLife() && &player == MyPlayer) {
-		SyncPlrKill(player, DeathReason::Unknown);
-		return;
-	}
-
-	StartWalkAnimation(player, dir, pmWillBeCalled);
-	HandleWalkMode(player, dir);
-}
-
 void InitLevelChange(Player &player)
 {
 	const Player &myPlayer = *MyPlayer;
@@ -1494,7 +1486,7 @@ void InitLevelChange(Player &player)
 
 	FixPlrWalkTags(player);
 	SetPlayerOld(player);
-	if (&player == MyPlayer) {
+	if (IsLocalPlayer(player)) {
 		player.occupyTile(player.position.tile, false);
 	} else {
 		player._pLvlVisited[player.plrlevel] = true;
@@ -1504,9 +1496,23 @@ void InitLevelChange(Player &player)
 	player.destAction = ACTION_NONE;
 	player._pLvlChanging = true;
 
-	if (&player == MyPlayer) {
+	if (IsLocalPlayer(player)) {
 		player.pLvlLoad = 10;
 	}
+}
+
+/**
+ * @brief Start moving a player to a new tile
+ */
+void StartWalk(Player &player, Direction dir, bool pmWillBeCalled)
+{
+	if (player._pInvincible && player.hasNoLife() && IsLocalPlayer(player)) {
+		SyncPlrKill(player, DeathReason::Unknown);
+		return;
+	}
+
+	StartWalkAnimation(player, dir, pmWillBeCalled);
+	HandleWalkMode(player, dir);
 }
 
 void Player::CalcScrolls()
@@ -2384,7 +2390,7 @@ void NextPlrLevel(Player &player)
 	player._pMaxHPBase += hp;
 	player._pHPBase = player._pMaxHPBase;
 
-	if (&player == MyPlayer) {
+	if (IsLocalPlayer(player)) {
 		RedrawComponent(PanelDrawComponent::Health);
 	}
 
@@ -2398,7 +2404,7 @@ void NextPlrLevel(Player &player)
 		player._pManaBase = player._pMaxManaBase;
 	}
 
-	if (&player == MyPlayer) {
+	if (IsLocalPlayer(player)) {
 		RedrawComponent(PanelDrawComponent::Mana);
 	}
 
@@ -2501,6 +2507,7 @@ void InitPlayer(Player &player, bool firstTime)
 
 		player._pdir = Direction::South;
 
+		// Local co-op players are placed next to Player 1 by the local co-op code
 		if (&player == MyPlayer && (!firstTime || leveltype != DTYPE_TOWN)) {
 			player.position.tile = ViewPosition;
 		}
@@ -2509,9 +2516,12 @@ void InitPlayer(Player &player, bool firstTime)
 		player.walkpath[0] = WALK_NONE;
 		player.destAction = ACTION_NONE;
 
-		if (&player == MyPlayer) {
+		// Set up lighting for local players (MyPlayer and local coop players)
+		if (IsLocalPlayer(player)) {
 			player.lightId = AddLight(player.position.tile, player._pLightRad);
 			ChangeLightXY(player.lightId, player.position.tile); // fix for a bug where old light is still visible at the entrance after reentering level
+		} else {
+			player.lightId = NO_LIGHT;
 		}
 		ActivateVision(player.position.tile, player._pLightRad, player.getId());
 	}
@@ -2520,7 +2530,7 @@ void InitPlayer(Player &player, bool firstTime)
 
 	player._pInvincible = false;
 
-	if (&player == MyPlayer) {
+	if (IsLocalPlayer(player)) {
 		MyPlayerIsDead = false;
 	}
 }
@@ -2528,6 +2538,20 @@ void InitPlayer(Player &player, bool firstTime)
 void InitMultiView()
 {
 	assert(MyPlayer != nullptr);
+
+#ifndef USE_SDL1
+	// In local co-op mode with initialized players, center view on all players
+	if (IsAnyLocalCoopPlayerInitialized()) {
+		// Calculate center position of all active local coop players
+		Point centerPos = CalculateLocalCoopViewPosition();
+		ViewPosition = centerPos;
+
+		// Reset camera smoothing to snap to new position
+		ResetLocalCoopCamera();
+		return;
+	}
+#endif
+	// Single player or no coop players initialized yet
 	ViewPosition = MyPlayer->position.tile;
 }
 
@@ -2565,16 +2589,14 @@ void FixPlayerLocation(Player &player, Direction bDir)
 {
 	player.position.future = player.position.tile;
 	player._pdir = bDir;
-	if (&player == MyPlayer) {
-		ViewPosition = player.position.tile;
-	}
+	SetViewPositionForPlayer(player, player.position.tile);
 	ChangeLightXY(player.lightId, player.position.tile);
 	ChangeVisionXY(player.getId(), player.position.tile);
 }
 
 void StartStand(Player &player, Direction dir)
 {
-	if (player._pInvincible && player.hasNoLife() && &player == MyPlayer) {
+	if (player._pInvincible && player.hasNoLife() && IsLocalPlayer(player)) {
 		SyncPlrKill(player, DeathReason::Unknown);
 		return;
 	}
@@ -2589,7 +2611,7 @@ void StartStand(Player &player, Direction dir)
 
 void StartPlrBlock(Player &player, Direction dir)
 {
-	if (player._pInvincible && player.hasNoLife() && &player == MyPlayer) {
+	if (player._pInvincible && player.hasNoLife() && IsLocalPlayer(player)) {
 		SyncPlrKill(player, DeathReason::Unknown);
 		return;
 	}
@@ -2624,7 +2646,7 @@ void FixPlrWalkTags(const Player &player)
 
 void StartPlrHit(Player &player, Fixed26_6 dam, bool forcehit)
 {
-	if (player._pInvincible && player.hasNoLife() && &player == MyPlayer) {
+	if (player._pInvincible && player.hasNoLife() && IsLocalPlayer(player)) {
 		SyncPlrKill(player, DeathReason::Unknown);
 		return;
 	}
@@ -2668,7 +2690,7 @@ void StartPlayerKill(Player &player, DeathReason deathReason)
 		return;
 	}
 
-	if (&player == MyPlayer) {
+	if (IsLocalPlayer(player)) {
 		NetSendCmdParam1(true, CMD_PLRDEAD, static_cast<uint16_t>(deathReason));
 		gamemenu_off();
 	}
@@ -2699,7 +2721,7 @@ void StartPlayerKill(Player &player, DeathReason deathReason)
 	player._pInvincible = true;
 	SetPlayerHitPoints(player, Fixed26_6::fromInt(0));
 
-	if (&player != MyPlayer && dropItems) {
+	if (!IsLocalPlayer(player) && dropItems) {
 		// Ensure that items are removed for remote players
 		// The dropped items will be synced separately (by the remote client)
 		for (Item &item : player.InvBody) {
@@ -2716,7 +2738,7 @@ void StartPlayerKill(Player &player, DeathReason deathReason)
 
 		// Only generate drops once (for the local player)
 		// For remote players we get separated sync messages (by the remote client)
-		if (&player == MyPlayer) {
+		if (IsLocalPlayer(player)) {
 			RedrawComponent(PanelDrawComponent::Health);
 
 			if (!player.HoldItem.isEmpty()) {
@@ -2819,7 +2841,7 @@ void StripTopGold(Player &player)
 void ApplyPlrDamage(DamageType damageType, Player &player, Fixed26_6 dam, int minHP /*= 0*/, DeathReason deathReason /*= DeathReason::MonsterOrTrap*/)
 {
 	Fixed26_6 totalDamage = dam;
-	if (&player == MyPlayer && !player.hasNoLife()) {
+	if (IsLocalPlayer(player) && !player.hasNoLife()) {
 		lua::OnPlayerTakeDamage(&player, totalDamage.raw(), static_cast<int>(damageType));
 	}
 	if (totalDamage > 0 && player.pManaShield && HasNoneOf(player._pIFlags, ItemSpecialEffect::NoMana)) {
@@ -2827,7 +2849,7 @@ void ApplyPlrDamage(DamageType damageType, Player &player, Fixed26_6 dam, int mi
 		if (manaShieldLevel > 0) {
 			totalDamage += totalDamage / -player.GetManaShieldDamageReduction();
 		}
-		if (&player == MyPlayer)
+		if (IsLocalPlayer(player))
 			RedrawComponent(PanelDrawComponent::Mana);
 		if (player._pMana >= totalDamage) {
 			player._pMana -= totalDamage;
@@ -2840,8 +2862,10 @@ void ApplyPlrDamage(DamageType damageType, Player &player, Fixed26_6 dam, int mi
 			}
 			player._pMana = Fixed26_6::fromInt(0);
 			player._pManaBase = player._pMaxManaBase - player._pMaxMana;
-			if (&player == MyPlayer)
+			if (IsLocalPlayer(player)) {
+				const LocalCoopPlayerContext context(player.getId());
 				NetSendCmd(true, CMD_REMSHIELD);
+			}
 		}
 	}
 
@@ -2866,6 +2890,11 @@ void ApplyPlrDamage(DamageType damageType, Player &player, Fixed26_6 dam, int mi
 
 void SyncPlrKill(Player &player, DeathReason deathReason)
 {
+	if (player.hasNoLife() && leveltype == DTYPE_TOWN) {
+		SetPlayerHitPoints(player, Fixed26_6::fromInt(1));
+		return;
+	}
+
 	SetPlayerHitPoints(player, Fixed26_6::fromInt(0));
 	StartPlayerKill(player, deathReason);
 }
@@ -2902,7 +2931,7 @@ StartNewLvl(Player &player, interface_mode fom, int lvl)
 		player.setLevel(lvl);
 		break;
 	case WM_DIABSETLVL:
-		if (&player == MyPlayer)
+		if (IsLocalPlayer(player))
 			setlvlnum = (_setlevels)lvl;
 		player.setLevel(setlvlnum);
 		break;
@@ -2916,9 +2945,14 @@ StartNewLvl(Player &player, interface_mode fom, int lvl)
 		app_fatal("StartNewLvl");
 	}
 
-	if (&player == MyPlayer) {
+	if (IsLocalPlayer(player)) {
 		player._pmode = PM_NEWLVL;
 		player._pInvincible = true;
+
+		// In local co-op, sync all local coop players to the same level
+		// They share the same screen and must always be on the same level
+		SyncLocalCoopPlayersToLevel(fom, lvl);
+
 		SDL_Event event;
 		CustomEventToSdlEvent(event, fom);
 		SDL_PushEvent(&event);
@@ -2943,7 +2977,7 @@ void RestartTownLvl(Player &player)
 	CalcPlrInv(player, false);
 	player._pmode = PM_NEWLVL;
 
-	if (&player == MyPlayer) {
+	if (IsLocalPlayer(player)) {
 		player._pInvincible = true;
 		SDL_Event event;
 		CustomEventToSdlEvent(event, WM_DIABRETOWN);
@@ -2966,7 +3000,7 @@ void StartWarpLvl(Player &player, size_t pidx)
 		}
 	}
 
-	if (&player == MyPlayer) {
+	if (IsLocalPlayer(player)) {
 		SetCurrentPortal(pidx);
 		player._pmode = PM_NEWLVL;
 		player._pInvincible = true;
@@ -3011,16 +3045,17 @@ void ProcessPlayers()
 
 	for (size_t pnum = 0; pnum < Players.size(); pnum++) {
 		Player &player = Players[pnum];
-		if (player.plractive && player.isOnActiveLevel() && (&player == MyPlayer || !player._pLvlChanging)) {
+		if (player.plractive && player.isOnActiveLevel() && (IsLocalPlayer(player) || !player._pLvlChanging)) {
 			if (!PlrDeathModeOK(player) && player.hasNoLife()) {
 				SyncPlrKill(player, DeathReason::Unknown);
 			}
 
-			if (&player == MyPlayer) {
+			if (IsLocalPlayer(player)) {
 				if (HasAnyOf(player._pIFlags, ItemSpecialEffect::DrainLife) && leveltype != DTYPE_TOWN) {
 					ApplyPlrDamage(DamageType::Physical, player, Fixed26_6::fromRaw(4));
 				}
 				if (player.pManaShield && HasAnyOf(player._pIFlags, ItemSpecialEffect::NoMana)) {
+					const LocalCoopPlayerContext context(player.getId());
 					NetSendCmd(true, CMD_REMSHIELD);
 				}
 			}
@@ -3273,10 +3308,7 @@ void SyncInitPlrPos(Player &player)
 	player.position.tile = position;
 	player.occupyTile(position, false);
 	player.position.future = position;
-
-	if (&player == MyPlayer) {
-		ViewPosition = position;
-	}
+	SetViewPositionForPlayer(player, position);
 }
 
 void SyncInitPlr(Player &player)
@@ -3317,7 +3349,7 @@ void ModifyPlrStr(Player &player, int l)
 
 	CalcPlrInv(player, true);
 
-	if (&player == MyPlayer) {
+	if (IsLocalPlayer(player)) {
 		NetSendCmdParam1(false, CMD_SETSTR, player._pBaseStr);
 	}
 }
@@ -3340,7 +3372,7 @@ void ModifyPlrMag(Player &player, int l)
 
 	CalcPlrInv(player, true);
 
-	if (&player == MyPlayer) {
+	if (IsLocalPlayer(player)) {
 		NetSendCmdParam1(false, CMD_SETMAG, player._pBaseMag);
 	}
 }
@@ -3353,7 +3385,7 @@ void ModifyPlrDex(Player &player, int l)
 	player._pBaseDex += l;
 	CalcPlrInv(player, true);
 
-	if (&player == MyPlayer) {
+	if (IsLocalPlayer(player)) {
 		NetSendCmdParam1(false, CMD_SETDEX, player._pBaseDex);
 	}
 }
@@ -3374,7 +3406,7 @@ void ModifyPlrVit(Player &player, int l)
 
 	CalcPlrInv(player, true);
 
-	if (&player == MyPlayer) {
+	if (IsLocalPlayer(player)) {
 		NetSendCmdParam1(false, CMD_SETVIT, player._pBaseVit);
 	}
 }
@@ -3384,7 +3416,7 @@ void SetPlayerHitPoints(Player &player, Fixed26_6 val)
 	player._pHitPoints = val;
 	player._pHPBase = val + player._pMaxHPBase - player._pMaxHP;
 
-	if (&player == MyPlayer) {
+	if (IsLocalPlayer(player)) {
 		RedrawComponent(PanelDrawComponent::Health);
 	}
 }
