@@ -36,6 +36,49 @@ local function CreateEvent()
   }
 end
 
+---Creates an event whose handlers can cancel the engine's default behaviour.
+---
+---Every handler is called. The trigger returns true if any handler returned true.
+local function CreateCancellableEvent()
+  local functions = {}
+  return {
+    ---Adds an event handler.
+    ---
+    ---The handler is called every time the event is triggered. Return true from it to cancel the default behaviour.
+    ---@param func function
+    add = function(func)
+      table.insert(functions, func)
+    end,
+
+    ---Removes the event handler.
+    ---@param func function
+    remove = function(func)
+      for i, f in ipairs(functions) do
+        if f == func then
+          table.remove(functions, i)
+          break
+        end
+      end
+    end,
+
+    ---Triggers the event.
+    ---
+    ---The arguments are forwarded to handlers.
+    ---@param ... any
+    ---@return boolean cancelled true if any handler returned true
+    trigger = function(...)
+      local cancelled = false
+      for _, func in ipairs(functions) do
+        if func(...) == true then
+          cancelled = true
+        end
+      end
+      return cancelled
+    end,
+    __sig_trigger = "(...) -> boolean",
+  }
+end
+
 local events = {
   ---Called after all mods have been loaded.
   LoadModsComplete = CreateEvent(),
@@ -84,6 +127,18 @@ local events = {
   ---Called when Player gains experience.
   OnPlayerGainExperience = CreateEvent(),
   __doc_OnPlayerGainExperience = "Called when Player gains experience.",
+
+  ---Called when the local player uses (right-clicks) a usable item from the inventory or belt. Arguments: player, item.
+  ---Return true to cancel the default use behaviour (the item is then not consumed).
+  OnItemUse = CreateCancellableEvent(),
+  __doc_OnItemUse = "Called when the local player uses an item. Arguments: player, item. Return true to cancel the default use behaviour (the item is then not consumed).",
+
+  ---Called when Diablo's defeat is about to end the game. Arguments: diablo, isLocalKill.
+  ---Fired when Diablo is killed (diablo is the Monster; isLocalKill is true only on the client that killed him, which is the one that should sync any new items to other players),
+  ---and when a single-player game is loaded after Diablo was defeated (diablo is nil, isLocalKill is false).
+  ---Return true to keep the game running: Diablo then dies like any other monster and the ending is not shown. Use game.endGame() to show it later.
+  OnDiabloDefeated = CreateCancellableEvent(),
+  __doc_OnDiabloDefeated = "Called when Diablo's defeat is about to end the game. Arguments: diablo (Monster, or nil when a single-player game is loaded after his defeat), isLocalKill (true only on the client that killed him). Return true to keep the game running; use game.endGame() to show the ending later.",
 }
 
 ---Registers a custom event type with the given name.

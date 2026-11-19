@@ -872,13 +872,25 @@ void StartEating(Monster &monster)
 	monster.position.old = monster.position.tile;
 }
 
-void DiabloDeath(Monster &diablo, bool sendmsg)
+/**
+ * @param sendmsg Whether to sync the quest state to other clients.
+ * @param isLocalKill Whether this client killed Diablo (forwarded to Lua).
+ */
+void DiabloDeath(Monster &diablo, bool sendmsg, bool isLocalKill)
 {
 	PlaySFX(SfxID::DiabloDeath);
 	auto &quest = Quests[Q_DIABLO];
 	quest._qactive = QUEST_DONE;
 	if (sendmsg)
 		NetSendCmdQuest(true, quest);
+	if (!gbIsMultiplayer) {
+		Player &myPlayer = *MyPlayer;
+		myPlayer.pDiabloKillLevel = std::max(myPlayer.pDiabloKillLevel, static_cast<uint8_t>(sgGameInitInfo.nDifficulty + 1));
+	}
+	if (lua::OnDiabloDefeated(&diablo, isLocalKill)) {
+		// A mod keeps the game running: skip the ending sequence and let Diablo die like any other monster.
+		return;
+	}
 	sgbSaveSoundOn = gbSoundOn;
 	gbProcessPlayers = false;
 	for (size_t i = 0; i < ActiveMonsterCount; i++) {
@@ -902,10 +914,13 @@ void DiabloDeath(Monster &diablo, bool sendmsg)
 	diablo.var3 = ViewPosition.x << 16;
 	diablo.position.temp.x = ViewPosition.y << 16;
 	diablo.position.temp.y = (int)((diablo.var3 - (diablo.position.tile.x << 16)) / (float)dist);
-	if (!gbIsMultiplayer) {
-		Player &myPlayer = *MyPlayer;
-		myPlayer.pDiabloKillLevel = std::max(myPlayer.pDiabloKillLevel, static_cast<uint8_t>(sgGameInitInfo.nDifficulty + 1));
-	}
+}
+
+/** Whether the monster is Diablo playing out the death sequence that ends the game (see DiabloDeath). */
+bool IsInDiabloEndingSequence(const Monster &monster)
+{
+	// DiabloDeath stops player processing for the ending sequence; if a mod kept the game running it is still on.
+	return monster.type().type == MT_DIABLO && !gbProcessPlayers;
 }
 
 void SpawnLoot(Monster &monster, bool sendmsg)
@@ -1500,7 +1515,7 @@ void ShrinkLeaderPacksize(const Monster &monster)
 void MonsterDeath(Monster &monster)
 {
 	monster.var1++;
-	if (monster.type().type == MT_DIABLO) {
+	if (IsInDiabloEndingSequence(monster)) {
 		if (monster.position.tile.x < ViewPosition.x) {
 			ViewPosition.x--;
 		} else if (monster.position.tile.x > ViewPosition.x) {
@@ -4014,9 +4029,7 @@ void MonsterDeath(Monster &monster, Direction md, bool sendmsg)
 
 	SpawnLoot(monster, sendmsg);
 
-	if (monster.type().type == MT_DIABLO)
-		DiabloDeath(monster, true);
-	else
+	if (monster.type().type != MT_DIABLO)
 		PlayEffect(monster, MonsterSound::Death);
 
 	if (monster.mode != MonsterMode::Petrified) {
@@ -4037,6 +4050,9 @@ void MonsterDeath(Monster &monster, Direction md, bool sendmsg)
 	M_FallenFear(monster.position.tile);
 	if (IsAnyOf(monster.type().type, MT_NACID, MT_RACID, MT_BACID, MT_XACID, MT_SPIDLORD))
 		AddMissile(monster.position.tile, { 0, 0 }, Direction::South, MissileID::AcidPuddle, TARGET_PLAYERS, monster, monster.intelligence + 1, 0);
+	// Last, so that Lua handlers of OnDiabloDefeated see Diablo where his body ends up.
+	if (monster.type().type == MT_DIABLO)
+		DiabloDeath(monster, true, sendmsg);
 }
 
 void StartMonsterDeath(Monster &monster, const Player &player, bool sendmsg)
