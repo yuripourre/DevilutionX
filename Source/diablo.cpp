@@ -3539,6 +3539,10 @@ void diablo_color_cyc_logic()
 bool IsDiabloAlive(bool playSFX)
 {
 	if (Quests[Q_DIABLO]._qactive == QUEST_DONE && !gbIsMultiplayer) {
+		if (lua::OnDiabloDefeated(nullptr, /*isLocalKill=*/false)) {
+			// A mod kept the game running after Diablo's defeat.
+			return true;
+		}
 		if (playSFX)
 			PlaySFX(SfxID::DiabloDeath);
 		return false;

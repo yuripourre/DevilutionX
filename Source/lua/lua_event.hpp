@@ -30,6 +30,14 @@ void OnPlayerTakeDamage(const Player *player, int damage, int damageType);
  */
 bool OnItemUse(const Player *player, const Item *item);
 
+/**
+ * @brief Called when Diablo's defeat is about to end the game.
+ * @param diablo The Diablo monster, or nullptr when a single-player game is loaded after his defeat.
+ * @param isLocalKill Whether this client killed Diablo (and is therefore responsible for syncing state to other clients).
+ * @return true if a handler wants the game to keep running instead of showing the ending.
+ */
+bool OnDiabloDefeated(const Monster *diablo, bool isLocalKill);
+
 void LoadModsComplete();
 void GameDrawComplete();
 void GameStart();

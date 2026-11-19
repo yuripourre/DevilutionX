@@ -132,6 +132,13 @@ local events = {
   ---Return true to cancel the default use behaviour (the item is then not consumed).
   OnItemUse = CreateCancellableEvent(),
   __doc_OnItemUse = "Called when the local player uses an item. Arguments: player, item. Return true to cancel the default use behaviour (the item is then not consumed).",
+
+  ---Called when Diablo's defeat is about to end the game. Arguments: diablo, isLocalKill.
+  ---Fired when Diablo is killed (diablo is the Monster; isLocalKill is true only on the client that killed him, which is the one that should sync any new items to other players),
+  ---and when a single-player game is loaded after Diablo was defeated (diablo is nil, isLocalKill is false).
+  ---Return true to keep the game running: Diablo then dies like any other monster and the ending is not shown.
+  OnDiabloDefeated = CreateCancellableEvent(),
+  __doc_OnDiabloDefeated = "Called when Diablo's defeat is about to end the game. Arguments: diablo (Monster, or nil when a single-player game is loaded after his defeat), isLocalKill (true only on the client that killed him). Return true to keep the game running: Diablo then dies like any other monster and the ending is not shown.",
 }
 
 ---Registers a custom event type with the given name.

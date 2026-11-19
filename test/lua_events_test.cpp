@@ -5,6 +5,7 @@
 #include <sol/sol.hpp>
 
 #include "cursor.h"
+#include "dead.h"
 #include "diablo.h"
 #include "engine/assets.hpp"
 #include "engine/sound.h"
@@ -12,11 +13,16 @@
 #include "headless_mode.hpp"
 #include "inv.h"
 #include "items.h"
+#include "levels/dun_tile_data.hpp"
+#include "levels/gendung.h"
 #include "lua/lua_event.hpp"
 #include "lua/lua_global.hpp"
+#include "monster.h"
 #include "options.h"
 #include "player.h"
+#include "storm/storm_net.hpp"
 #include "tables/itemdat.h"
+#include "tables/questdat.hpp"
 #include "utils/paths.h"
 
 namespace devilution {
@@ -63,6 +69,7 @@ public:
 		InspectPlayer = MyPlayer;
 		gbIsMultiplayer = false;
 		gbSoundOn = false;
+		savedDiabloQuestState_ = Quests[Q_DIABLO]._qactive;
 		LuaInitialize();
 	}
 
@@ -71,6 +78,7 @@ public:
 		if (missingMpqAssets_)
 			return;
 		LuaShutdown();
+		Quests[Q_DIABLO]._qactive = savedDiabloQuestState_;
 	}
 
 protected:
@@ -86,6 +94,7 @@ private:
 	static inline bool missingMpqAssets_ = false;
 	static inline bool savedHeadlessMode_ = false;
 	static inline bool savedIsMultiplayer_ = false;
+	quest_state savedDiabloQuestState_ = QUEST_NOTAVAIL;
 };
 
 TEST_F(LuaEventsTest, OnItemUseIsNotCancelledWithoutHandlers)
@@ -137,6 +146,142 @@ TEST_F(LuaEventsTest, CancelledItemUseDoesNotConsumeTheItem)
 	LuaInitialize();
 	EXPECT_TRUE(UseInvItem(INVITEM_INV_FIRST));
 	EXPECT_EQ(player._pNumInv, 0);
+}
+
+TEST_F(LuaEventsTest, OnDiabloDefeatedIsNotCancelledWithoutHandlers)
+{
+	EXPECT_FALSE(lua::OnDiabloDefeated(nullptr, false));
+}
+
+TEST_F(LuaEventsTest, OnDiabloDefeatedReceivesItsArguments)
+{
+	const sol::table state = RunLua(R"lua(
+		local events = require("devilutionx.events")
+		local state = {}
+		events.OnDiabloDefeated.add(function(diablo, isLocalKill)
+		  state.diabloIsNil = diablo == nil
+		  state.isLocalKill = isLocalKill
+		  return true
+		end)
+		return state
+	)lua");
+
+	EXPECT_TRUE(lua::OnDiabloDefeated(nullptr, false));
+	EXPECT_TRUE(state.get<bool>("diabloIsNil"));
+	EXPECT_FALSE(state.get<bool>("isLocalKill"));
+}
+
+TEST_F(LuaEventsTest, LoadingAGameAfterDiablosDefeatEndsItUnlessAModKeepsItRunning)
+{
+	Quests[Q_DIABLO]._qactive = QUEST_DONE;
+	EXPECT_FALSE(IsDiabloAlive(false));
+
+	RunLua(R"lua(
+		require("devilutionx.events").OnDiabloDefeated.add(function() return true end)
+	)lua");
+	EXPECT_TRUE(IsDiabloAlive(false));
+}
+
+class DiabloDeathTest : public LuaEventsTest {
+public:
+	void SetUp() override
+	{
+		LuaEventsTest::SetUp();
+		if (IsSkipped())
+			return;
+		savedCurrlevel_ = currlevel;
+		savedLeveltype_ = leveltype;
+		currlevel = 16;
+		leveltype = DTYPE_HELL;
+		setlevel = false;
+		gbRunGame = true;
+		gbProcessPlayers = true;
+		cineflag = false;
+		Quests[Q_DIABLO]._qactive = QUEST_ACTIVE;
+		SNetInitializeProvider(SELCONN_LOOPBACK, nullptr);
+
+		Player &player = *MyPlayer;
+		player = {};
+		player.setLevel(16);
+		player.position.tile = { 40, 40 };
+
+		InitItems();
+		InitLevelMonsters();
+		// Like a real level: the first monster slots are reserved for golems.
+		ASSERT_TRUE(AddMonsterType(MT_GOLEM, PLACE_SPECIAL).has_value());
+		InitGolems();
+		const auto typeIndex = AddMonsterType(MT_DIABLO, PLACE_SPECIAL);
+		ASSERT_TRUE(typeIndex.has_value()) << typeIndex.error();
+		diablo_ = AddMonster({ 50, 50 }, Direction::South, *typeIndex, /*inMap=*/true);
+		ASSERT_NE(diablo_, nullptr);
+		InitCorpses();
+	}
+
+	void TearDown() override
+	{
+		if (!IsSkipped()) {
+			currlevel = savedCurrlevel_;
+			leveltype = savedLeveltype_;
+			gbRunGame = false;
+			gbProcessPlayers = true;
+			cineflag = false;
+		}
+		LuaEventsTest::TearDown();
+	}
+
+protected:
+	/** Kills Diablo and plays out his death sequence. */
+	void KillDiablo()
+	{
+		M_StartKill(*diablo_, *MyPlayer);
+		for (int tick = 0; tick < 300 && gbRunGame && !diablo_->isInvalid; tick++)
+			ProcessMonsters();
+	}
+
+	Monster *diablo_ = nullptr;
+
+private:
+	uint8_t savedCurrlevel_ = 0;
+	dungeon_type savedLeveltype_ = DTYPE_TOWN;
+};
+
+TEST_F(DiabloDeathTest, EndsTheGameWithoutHandlers)
+{
+	M_StartKill(*diablo_, *MyPlayer);
+	EXPECT_EQ(Quests[Q_DIABLO]._qactive, QUEST_DONE);
+	EXPECT_FALSE(gbProcessPlayers);
+
+	KillDiablo();
+	EXPECT_FALSE(gbRunGame);
+	EXPECT_TRUE(cineflag);
+}
+
+TEST_F(DiabloDeathTest, KeepsTheGameRunningIfAHandlerSaysSo)
+{
+	const sol::table state = RunLua(R"lua(
+		local events = require("devilutionx.events")
+		local state = {}
+		events.OnDiabloDefeated.add(function(diablo, isLocalKill)
+		  state.gotDiablo = diablo ~= nil
+		  state.isLocalKill = isLocalKill
+		  return true
+		end)
+		return state
+	)lua");
+
+	KillDiablo();
+
+	EXPECT_TRUE(state.get<bool>("gotDiablo"));
+	EXPECT_TRUE(state.get<bool>("isLocalKill"));
+	EXPECT_EQ(Quests[Q_DIABLO]._qactive, QUEST_DONE);
+
+	// No ending sequence: players keep moving and Diablo leaves a corpse like any other monster.
+	EXPECT_TRUE(gbProcessPlayers);
+	EXPECT_TRUE(gbRunGame);
+	EXPECT_FALSE(cineflag);
+	EXPECT_TRUE(diablo_->isInvalid);
+	EXPECT_EQ(dMonster[50][50], 0);
+	EXPECT_NE(dCorpse[50][50], 0);
 }
 
 } // namespace

@@ -98,6 +98,11 @@ bool OnItemUse(const Player *player, const Item *item)
 	return CallLuaEventReturn(false, "OnItemUse", player, item);
 }
 
+bool OnDiabloDefeated(const Monster *diablo, bool isLocalKill)
+{
+	return CallLuaEventReturn(false, "OnDiabloDefeated", diablo, isLocalKill);
+}
+
 void LoadModsComplete()
 {
 	CallLuaEvent("LoadModsComplete");
