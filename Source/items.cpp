@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <format>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -3850,12 +3851,12 @@ int RegisterCustomDropAnim(OwnedClxSpriteList sprites, int numFrames)
 		app_fatal("Cannot register custom drop animation: sprite has no frames.");
 	}
 	if (numFrames < 1 || numFrames > INT8_MAX) {
-		app_fatal(fmt::format(
+		app_fatal(std::format(
 		    "Cannot register custom drop animation: numFrames {} is out of range (1..{}, AnimationInfo uses int8_t).",
 		    numFrames, INT8_MAX));
 	}
 	if (static_cast<uint32_t>(numFrames) > numSprites) {
-		app_fatal(fmt::format(
+		app_fatal(std::format(
 		    "Cannot register custom drop animation: numFrames {} exceeds loaded sprite frame count {}.",
 		    numFrames, numSprites));
 	}

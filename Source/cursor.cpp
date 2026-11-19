@@ -7,6 +7,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <format>
 #include <limits>
 #include <string_view>
 #include <vector>
@@ -580,7 +581,7 @@ int RegisterCustomCursorGraphic(OwnedClxSpriteList sprite)
 	constexpr int maxItemCursorUint8 = std::numeric_limits<uint8_t>::max();
 	const int iCurs = ItemCAnimTblSize + static_cast<int>(customCursorSprites.size());
 	if (iCurs > maxItemCursorUint8) {
-		app_fatal(fmt::format(
+		app_fatal(std::format(
 		    "Cannot register custom cursor graphic: cursor id {} would exceed Item._iCurs limit (0..{}, ItemCAnimTblSize is {}).",
 		    iCurs, maxItemCursorUint8, ItemCAnimTblSize));
 	}
